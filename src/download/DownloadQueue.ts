@@ -2,7 +2,13 @@ import { SimpleEventEmitter } from './EventEmitter'
 import type { QueueItem, QueueState, QueueStatus } from './QueueItem'
 import { QueueStatus as Status } from './QueueItem'
 import { QueueEvent } from './QueueEvents'
-import type { RemotePackage, LocalPackage, DownloadProgress } from '../types/package'
+import type {
+  RemotePackage,
+  LocalPackage,
+  DownloadProgress,
+} from '../types/package'
+import type { QueueConfig } from './QueueConfig'
+import { mergeQueueConfig } from './QueueConfig'
 
 /**
  * DownloadQueue manages sequential downloads
@@ -23,17 +29,39 @@ export class DownloadQueue {
   private status: QueueStatus = Status.IDLE
   private eventEmitter = new SimpleEventEmitter()
   private processing = false
+  private config: Required<QueueConfig>
 
-  private constructor() {}
+  private constructor(config?: QueueConfig) {
+    this.config = mergeQueueConfig(config)
+  }
 
   /**
    * Get singleton instance
+   * @param config Optional configuration (only applied on first call)
    */
-  static getInstance(): DownloadQueue {
+  static getInstance(config?: QueueConfig): DownloadQueue {
     if (!this.instance) {
-      this.instance = new DownloadQueue()
+      this.instance = new DownloadQueue(config)
     }
     return this.instance
+  }
+
+  /**
+   * Update queue configuration
+   * @param config Partial configuration to merge with current config
+   */
+  updateConfig(config: QueueConfig): void {
+    this.config = mergeQueueConfig({ ...this.config, ...config })
+    if (this.config.debug) {
+      console.log('[DownloadQueue] Configuration updated:', this.config)
+    }
+  }
+
+  /**
+   * Get current configuration
+   */
+  getConfig(): Required<QueueConfig> {
+    return { ...this.config }
   }
 
   /**
@@ -125,26 +153,52 @@ export class DownloadQueue {
    * Download with retry logic
    */
   private async downloadWithRetry(item: QueueItem): Promise<LocalPackage> {
-    const maxRetries = 3
     let lastError: Error | null = null
 
-    while (item.attempts < maxRetries) {
+    while (item.attempts < this.config.maxRetries) {
       try {
         item.attempts++
+
+        if (this.config.debug) {
+          console.log(
+            `[DownloadQueue] Attempt ${item.attempts}/${this.config.maxRetries} for ${item.remotePackage.packageHash}`
+          )
+        }
 
         const localPackage = await (item.remotePackage as any)._downloadInternal(
           item.progressCallback
         )
 
+        if (this.config.debug) {
+          console.log(
+            `[DownloadQueue] Download successful: ${item.remotePackage.packageHash}`
+          )
+        }
+
         return localPackage
       } catch (error) {
         lastError = error as Error
 
-        if (item.attempts < maxRetries) {
-          const delayMs = Math.pow(2, item.attempts) * 1000
+        if (item.attempts < this.config.maxRetries) {
+          const baseDelay = this.config.baseRetryDelay * Math.pow(2, item.attempts)
+          const delayMs = Math.min(baseDelay, this.config.maxRetryDelay)
+
+          if (this.config.debug) {
+            console.log(
+              `[DownloadQueue] Retry in ${delayMs}ms for ${item.remotePackage.packageHash}`
+            )
+          }
+
           await this.delay(delayMs)
         }
       }
+    }
+
+    if (this.config.debug) {
+      console.log(
+        `[DownloadQueue] Download failed after ${this.config.maxRetries} attempts: ${item.remotePackage.packageHash}`,
+        lastError
+      )
     }
 
     throw lastError || new Error('Download failed after maximum retries')

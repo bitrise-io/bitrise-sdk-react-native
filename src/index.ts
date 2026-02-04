@@ -8,6 +8,9 @@ export { CodePush } from './codepush/CodePush'
 export { codePush } from './codepush/decorator'
 export type { CodePushOptions } from './codepush/decorator'
 export { MetricsClient, MetricEvent } from './metrics/MetricsClient'
+export { DownloadQueue } from './download/DownloadQueue'
+export type { QueueConfig } from './download/QueueConfig'
+export { QueueEvent } from './download/QueueEvents'
 
 // Types
 export type { BitriseConfig } from './types/config'
