@@ -1,0 +1,6 @@
+node_modules/
+lib/
+coverage/
+*.config.js
+babel.config.js
+jest.config.js
