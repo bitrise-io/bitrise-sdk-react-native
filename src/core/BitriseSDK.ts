@@ -28,7 +28,10 @@ export class BitriseSDK {
     this.config = {
       ...config,
       apiEndpoint: config.apiEndpoint ?? 'https://api.bitrise.io/v0.1',
+      serverUrl: config.serverUrl ?? 'https://api.bitrise.io',
     }
+    // Reset CodePush instance when config changes
+    this._codePush = null
   }
 
   /**
@@ -59,6 +62,13 @@ export class BitriseSDK {
 
     if (!config.appSlug || config.appSlug.trim().length === 0) {
       throw new ConfigurationError('appSlug is required and cannot be empty')
+    }
+
+    // Validate deployment key if provided (should be non-empty string)
+    if (config.deploymentKey !== undefined) {
+      if (typeof config.deploymentKey !== 'string' || config.deploymentKey.trim().length === 0) {
+        throw new ConfigurationError('deploymentKey must be a non-empty string')
+      }
     }
   }
 }

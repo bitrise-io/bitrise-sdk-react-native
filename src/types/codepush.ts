@@ -1,5 +1,31 @@
 /**
- * Status of an update
+ * CodePush type definitions
+ * Re-exports all types for backward compatibility
+ */
+
+// Re-export enums
+export {
+  InstallMode,
+  SyncStatus,
+  UpdateState,
+  CheckFrequency,
+} from './enums'
+
+// Re-export package types
+export type {
+  Package,
+  RemotePackage,
+  LocalPackage,
+  DownloadProgress,
+  UpdateDialogOptions,
+  RollbackRetryOptions,
+  SyncOptions,
+  Configuration,
+} from './package'
+
+/**
+ * Legacy UpdateStatus enum for backward compatibility
+ * @deprecated Use SyncStatus instead
  */
 export enum UpdateStatus {
   UP_TO_DATE = 'UP_TO_DATE',
@@ -14,31 +40,13 @@ export enum UpdateStatus {
 }
 
 /**
- * Information about an available update
+ * Legacy UpdateInfo interface for backward compatibility
+ * @deprecated Use RemotePackage instead
  */
 export interface UpdateInfo {
-  /**
-   * Unique label for this update
-   */
   label: string
-
-  /**
-   * Version of the app bundle
-   */
   appVersion: string
-
-  /**
-   * Description of the update
-   */
   description?: string
-
-  /**
-   * Whether this is a mandatory update
-   */
   isMandatory: boolean
-
-  /**
-   * Size of the update package in bytes
-   */
   packageSize: number
 }

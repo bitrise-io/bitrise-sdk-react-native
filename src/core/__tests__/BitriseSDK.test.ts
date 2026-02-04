@@ -23,6 +23,7 @@ describe('BitriseSDK', () => {
       expect(BitriseSDK.getConfig()).toEqual({
         ...config,
         apiEndpoint: 'https://api.bitrise.io/v0.1',
+        serverUrl: 'https://api.bitrise.io',
       })
     })
 
@@ -63,6 +64,49 @@ describe('BitriseSDK', () => {
       // Act & Assert
       expect(() => BitriseSDK.configure(config)).toThrow(ConfigurationError)
       expect(() => BitriseSDK.configure(config)).toThrow('appSlug is required and cannot be empty')
+    })
+
+    it('should accept deploymentKey in config', () => {
+      // Arrange
+      const config = {
+        apiToken: 'test-token',
+        appSlug: 'test-slug',
+        deploymentKey: 'test-deployment-key',
+      }
+
+      // Act
+      BitriseSDK.configure(config)
+
+      // Assert
+      expect(BitriseSDK.getConfig().deploymentKey).toBe('test-deployment-key')
+    })
+
+    it('should throw ConfigurationError if deploymentKey is empty string', () => {
+      // Arrange
+      const config = {
+        apiToken: 'test-token',
+        appSlug: 'test-slug',
+        deploymentKey: '',
+      }
+
+      // Act & Assert
+      expect(() => BitriseSDK.configure(config)).toThrow(ConfigurationError)
+      expect(() => BitriseSDK.configure(config)).toThrow('deploymentKey must be a non-empty string')
+    })
+
+    it('should accept custom serverUrl', () => {
+      // Arrange
+      const config = {
+        apiToken: 'test-token',
+        appSlug: 'test-slug',
+        serverUrl: 'https://custom.server.url',
+      }
+
+      // Act
+      BitriseSDK.configure(config)
+
+      // Assert
+      expect(BitriseSDK.getConfig().serverUrl).toBe('https://custom.server.url')
     })
   })
 

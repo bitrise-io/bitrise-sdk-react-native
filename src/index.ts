@@ -8,4 +8,31 @@ export { CodePush } from './codepush/CodePush'
 
 // Types
 export type { BitriseConfig } from './types/config'
-export type { UpdateInfo, UpdateStatus } from './types/codepush'
+export type {
+  UpdateInfo,
+  Package,
+  RemotePackage,
+  LocalPackage,
+  DownloadProgress,
+  UpdateDialogOptions,
+  RollbackRetryOptions,
+  SyncOptions,
+  Configuration,
+} from './types/codepush'
+
+// Enums
+export {
+  UpdateStatus,
+  InstallMode,
+  SyncStatus,
+  UpdateState,
+  CheckFrequency,
+} from './types/codepush'
+
+// Errors
+export {
+  BitriseError,
+  ConfigurationError,
+  NetworkError,
+  UpdateError,
+} from './types/errors'
