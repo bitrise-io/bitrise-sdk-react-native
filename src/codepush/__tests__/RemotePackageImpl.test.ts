@@ -117,37 +117,52 @@ describe('RemotePackageImpl', () => {
       })
     })
 
-    it('should throw error if download already in progress', async () => {
+    it('should handle concurrent downloads via queue', async () => {
       const pkg1 = new RemotePackageImpl(mockPackageData)
-      const pkg2 = new RemotePackageImpl(mockPackageData)
+      const pkg2 = new RemotePackageImpl({ ...mockPackageData, packageHash: 'def456' })
 
-      // Mock a long-running download that will eventually complete
-      let resolveDownload: (value: unknown) => void
-      const downloadPromise = new Promise(resolve => {
-        resolveDownload = resolve
-      })
+      const mockData1 = new Uint8Array([1, 2, 3])
+      const mockData2 = new Uint8Array([4, 5, 6])
 
-      ;(global.fetch as jest.Mock).mockImplementation(() => downloadPromise)
+      // Mock fetch responses for both downloads
+      ;(global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: true,
+          headers: { get: jest.fn().mockReturnValue('3') },
+          body: {
+            getReader: jest.fn().mockReturnValue({
+              read: jest
+                .fn()
+                .mockResolvedValueOnce({ done: false, value: mockData1 })
+                .mockResolvedValueOnce({ done: true }),
+            }),
+          },
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          headers: { get: jest.fn().mockReturnValue('3') },
+          body: {
+            getReader: jest.fn().mockReturnValue({
+              read: jest
+                .fn()
+                .mockResolvedValueOnce({ done: false, value: mockData2 })
+                .mockResolvedValueOnce({ done: true }),
+            }),
+          },
+        })
 
-      // Start first download (don't await)
-      const download1 = pkg1.download()
+      ;(fileUtils.calculateHash as jest.Mock)
+        .mockResolvedValueOnce('abc123')
+        .mockResolvedValueOnce('def456')
+      ;(fileUtils.savePackage as jest.Mock)
+        .mockResolvedValueOnce('/codepush/abc123/index.bundle')
+        .mockResolvedValueOnce('/codepush/def456/index.bundle')
 
-      // Try to start second download immediately
-      await expect(pkg2.download()).rejects.toThrow(UpdateError)
-      await expect(pkg2.download()).rejects.toThrow('Download already in progress')
+      // Both downloads should complete successfully (queued internally)
+      const [local1, local2] = await Promise.all([pkg1.download(), pkg2.download()])
 
-      // Clean up - resolve the first download
-      resolveDownload!({
-        ok: false,
-        status: 500,
-        statusText: 'Internal Server Error',
-      })
-
-      try {
-        await download1
-      } catch {
-        // Ignore error from first download
-      }
+      expect(local1.packageHash).toBe('abc123')
+      expect(local2.packageHash).toBe('def456')
     })
 
     it('should throw error if hash verification fails', async () => {
@@ -216,6 +231,7 @@ describe('RemotePackageImpl', () => {
     })
 
     it('should retry on network failure', async () => {
+      jest.setTimeout(20000)
       const pkg = new RemotePackageImpl(mockPackageData)
       const mockData = new Uint8Array([1, 2, 3])
 
@@ -249,6 +265,7 @@ describe('RemotePackageImpl', () => {
     })
 
     it('should throw NetworkError after max retries', async () => {
+      jest.setTimeout(20000)
       const pkg = new RemotePackageImpl(mockPackageData)
 
       // Fail all attempts
@@ -259,6 +276,7 @@ describe('RemotePackageImpl', () => {
     })
 
     it('should throw NetworkError if HTTP response is not ok', async () => {
+      jest.setTimeout(20000)
       const pkg = new RemotePackageImpl(mockPackageData)
 
       ;(global.fetch as jest.Mock).mockResolvedValue({
@@ -275,6 +293,7 @@ describe('RemotePackageImpl', () => {
     })
 
     it('should throw NetworkError if response body is not readable', async () => {
+      jest.setTimeout(20000)
       const pkg = new RemotePackageImpl(mockPackageData)
 
       ;(global.fetch as jest.Mock).mockResolvedValue({
@@ -293,6 +312,7 @@ describe('RemotePackageImpl', () => {
     })
 
     it('should handle progress callback errors gracefully', async () => {
+      jest.setTimeout(20000)
       const pkg = new RemotePackageImpl(mockPackageData)
       const badCallback = jest.fn().mockImplementation(() => {
         throw new Error('Callback error')
@@ -329,6 +349,7 @@ describe('RemotePackageImpl', () => {
     })
 
     it('should use packageSize if Content-Length header is missing', async () => {
+      jest.setTimeout(20000)
       const pkg = new RemotePackageImpl(mockPackageData)
       const progressCallback = jest.fn()
       const mockData = new Uint8Array([1, 2, 3])

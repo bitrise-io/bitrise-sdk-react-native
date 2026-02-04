@@ -1,5 +1,12 @@
 import type { Package, LocalPackage } from '../types/package'
-import { getStorageItem, setStorageItem, removeStorageItem, clearStorage } from '../utils/storage'
+import {
+  getStorageItem,
+  setStorageItem,
+  removeStorageItem,
+  clearStorage,
+} from '../utils/storage'
+import { FileSystem } from '../native/FileSystem'
+import { FileSystemStorage } from './FileSystemStorage'
 
 /**
  * Storage keys for CodePush metadata
@@ -102,26 +109,96 @@ export class PackageStorage {
 
   /**
    * Store package binary data (base64 encoded)
+   * Automatically uses filesystem if available, otherwise falls back to in-memory
    */
-  static async setPackageData(packageHash: string, base64Data: string): Promise<void> {
+  static async setPackageData(
+    packageHash: string,
+    base64Data: string
+  ): Promise<void> {
+    if (FileSystem.isAvailable()) {
+      try {
+        const data = this.base64ToUint8Array(base64Data)
+        await FileSystemStorage.setPackageData(packageHash, data)
+        return
+      } catch (error) {
+        console.warn('[CodePush] Filesystem write failed, using in-memory:', error)
+      }
+    }
+
     const key = `${STORAGE_KEYS.PACKAGE_DATA_PREFIX}${packageHash}`
     this.cache.set(key, base64Data)
   }
 
   /**
    * Retrieve package binary data
+   * Automatically uses filesystem if available, otherwise falls back to in-memory
    */
   static async getPackageData(packageHash: string): Promise<string | null> {
+    if (FileSystem.isAvailable()) {
+      try {
+        const data = await FileSystemStorage.getPackageData(packageHash)
+        if (data !== null) {
+          return this.uint8ArrayToBase64(data)
+        }
+      } catch (error) {
+        console.warn('[CodePush] Filesystem read failed, using in-memory:', error)
+      }
+    }
+
     const key = `${STORAGE_KEYS.PACKAGE_DATA_PREFIX}${packageHash}`
     return this.cache.get(key) || null
   }
 
   /**
    * Delete package binary data
+   * Automatically uses filesystem if available, otherwise falls back to in-memory
    */
   static async deletePackageData(packageHash: string): Promise<void> {
+    if (FileSystem.isAvailable()) {
+      try {
+        await FileSystemStorage.deletePackageData(packageHash)
+      } catch (error) {
+        console.warn('[CodePush] Filesystem delete failed:', error)
+      }
+    }
+
     const key = `${STORAGE_KEYS.PACKAGE_DATA_PREFIX}${packageHash}`
     this.cache.delete(key)
+  }
+
+  /**
+   * Convert base64 string to Uint8Array
+   */
+  private static base64ToUint8Array(base64: string): Uint8Array {
+    const binary = atob(base64)
+    const len = binary.length
+    const bytes = new Uint8Array(len)
+
+    for (let i = 0; i < len; i++) {
+      const code = binary.charCodeAt(i)
+      if (!isNaN(code)) {
+        bytes[i] = code
+      }
+    }
+
+    return bytes
+  }
+
+  /**
+   * Convert Uint8Array to base64 string
+   */
+  private static uint8ArrayToBase64(data: Uint8Array): string {
+    let binary = ''
+    const len = data.length
+
+    for (let i = 0; i < len; i++) {
+      const byte = data[i]
+      if (byte !== undefined) {
+        binary += String.fromCharCode(byte)
+      }
+    }
+
+    return btoa(binary)
   }
 
   /**

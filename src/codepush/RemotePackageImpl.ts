@@ -1,9 +1,15 @@
-import type { RemotePackage, LocalPackage, DownloadProgress, Package } from '../types/package'
+import type {
+  RemotePackage,
+  LocalPackage,
+  DownloadProgress,
+  Package,
+} from '../types/package'
 import { NetworkError, UpdateError } from '../types/errors'
 import { calculateHash, savePackage, deletePackage } from '../utils/file'
 import { LocalPackageImpl } from './LocalPackageImpl'
 import { MetricsClient, MetricEvent } from '../metrics/MetricsClient'
 import { getErrorMessage } from '../utils/error'
+import { DownloadQueue } from '../download/DownloadQueue'
 
 /**
  * Implementation of RemotePackage interface
@@ -22,8 +28,6 @@ export class RemotePackageImpl implements RemotePackage {
   packageSize: number
   downloadUrl: string
 
-  private static downloadInProgress = false
-
   constructor(packageData: Package & { downloadUrl: string }) {
     this.appVersion = packageData.appVersion
     this.deploymentKey = packageData.deploymentKey
@@ -40,6 +44,7 @@ export class RemotePackageImpl implements RemotePackage {
 
   /**
    * Download this package from Bitrise R2 storage
+   * Automatically queues concurrent requests for sequential processing
    *
    * @param progressCallback - Optional callback for download progress
    * @returns Promise resolving to LocalPackage after successful download
@@ -56,20 +61,20 @@ export class RemotePackageImpl implements RemotePackage {
    * }
    * ```
    */
-  async download(progressCallback?: (progress: DownloadProgress) => void): Promise<LocalPackage> {
-    // TODO: Support download queueing for concurrent update requests
-    // Current behavior: Rejects with error if download already in progress
-    // Future enhancement: Queue downloads and process sequentially
+  async download(
+    progressCallback?: (progress: DownloadProgress) => void
+  ): Promise<LocalPackage> {
+    const queue = DownloadQueue.getInstance()
+    return queue.enqueue(this, progressCallback)
+  }
 
-    // Check if download already in progress
-    if (RemotePackageImpl.downloadInProgress) {
-      throw new UpdateError(
-        'Download already in progress. Please wait for current download to complete.',
-        { packageHash: this.packageHash }
-      )
-    }
-
-    RemotePackageImpl.downloadInProgress = true
+  /**
+   * Internal download method called by the download queue
+   * Handles actual download logic, verification, and storage
+   */
+  async _downloadInternal(
+    progressCallback?: (progress: DownloadProgress) => void
+  ): Promise<LocalPackage> {
 
     // Report DOWNLOAD_START metric
     MetricsClient.getInstance()?.reportEvent(MetricEvent.DOWNLOAD_START, {
@@ -146,8 +151,6 @@ export class RemotePackageImpl implements RemotePackage {
         packageHash: this.packageHash,
         error: getErrorMessage(error),
       })
-    } finally {
-      RemotePackageImpl.downloadInProgress = false
     }
   }
 

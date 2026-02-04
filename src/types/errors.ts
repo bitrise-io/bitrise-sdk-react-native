@@ -45,3 +45,17 @@ export class UpdateError extends BitriseError {
     Object.setPrototypeOf(this, UpdateError.prototype)
   }
 }
+
+/**
+ * Error thrown when filesystem operations fail
+ */
+export class FileSystemError extends BitriseError {
+  constructor(
+    message: string,
+    details?: { code?: string; path?: string; originalError?: unknown }
+  ) {
+    super(message, details?.code || 'FILESYSTEM_ERROR', details)
+    this.name = 'FileSystemError'
+    Object.setPrototypeOf(this, FileSystemError.prototype)
+  }
+}
