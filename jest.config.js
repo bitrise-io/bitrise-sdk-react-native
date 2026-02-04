@@ -4,9 +4,12 @@ module.exports = {
   testMatch: ['**/__tests__/**/*.test.(ts|tsx|js)', '**/*.test.(ts|tsx|js)'],
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',
+    'plugin/src/**/*.{ts,tsx}',
     '!src/**/*.test.{ts,tsx}',
     '!src/**/__tests__/**',
     '!src/types/**',
+    '!plugin/src/**/*.test.{ts,tsx}',
+    '!plugin/src/**/__tests__/**',
   ],
   coverageThreshold: {
     global: {
@@ -16,7 +19,7 @@ module.exports = {
       statements: 80,
     },
   },
-  coveragePathIgnorePatterns: ['/node_modules/', '/lib/', 'src/index.ts'],
+  coveragePathIgnorePatterns: ['/node_modules/', '/lib/', '/plugin/build/', 'src/index.ts', 'plugin/src/index.ts'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
@@ -24,6 +27,6 @@ module.exports = {
     '^.+\\.(js|jsx|ts|tsx)$': 'babel-jest',
   },
   transformIgnorePatterns: [
-    'node_modules/(?!(react-native|@react-native|@react-navigation)/)',
+    'node_modules/(?!(react-native|@react-native|@react-navigation|expo|@expo)/)',
   ],
 }

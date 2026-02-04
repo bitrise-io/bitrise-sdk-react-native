@@ -1,0 +1,16 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./build",
+    "rootDir": "./src",
+    "declaration": true,
+    "declarationMap": true,
+    "moduleResolution": "node",
+    "module": "commonjs",
+    "target": "es2017",
+    "lib": ["es2017"],
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["**/__tests__/**", "**/*.test.ts"]
+}

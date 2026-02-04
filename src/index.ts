@@ -42,3 +42,4 @@ export { BitriseError, ConfigurationError, NetworkError, UpdateError } from './t
 
 // Utilities
 export { setAppVersion } from './utils/platform'
+export { ExpoConfig } from './utils/expo-config'

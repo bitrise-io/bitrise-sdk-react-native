@@ -1,0 +1,52 @@
+{
+  "cli": {
+    "version": ">= 5.9.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "BITRISE_IOS_DEPLOYMENT_KEY": "dev-ios-key",
+        "BITRISE_ANDROID_DEPLOYMENT_KEY": "dev-android-key",
+        "BITRISE_SERVER_URL": "https://api.bitrise.io"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "ios": {
+        "simulator": false
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "BITRISE_IOS_DEPLOYMENT_KEY": "preview-ios-key",
+        "BITRISE_ANDROID_DEPLOYMENT_KEY": "preview-android-key",
+        "BITRISE_SERVER_URL": "https://api.bitrise.io"
+      }
+    },
+    "production": {
+      "ios": {
+        "simulator": false
+      },
+      "android": {
+        "buildType": "aab"
+      },
+      "env": {
+        "BITRISE_IOS_DEPLOYMENT_KEY": "prod-ios-key",
+        "BITRISE_ANDROID_DEPLOYMENT_KEY": "prod-android-key",
+        "BITRISE_SERVER_URL": "https://api.bitrise.io"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

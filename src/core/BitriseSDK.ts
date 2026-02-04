@@ -4,6 +4,7 @@ import { CodePush } from '../codepush/CodePush'
 import { RollbackManager } from '../codepush/RollbackManager'
 import { MetricsClient } from '../metrics/MetricsClient'
 import { getAppVersion } from '../utils/platform'
+import { ExpoConfig } from '../utils/expo-config'
 
 /**
  * Main SDK class for Bitrise integration
@@ -25,25 +26,46 @@ export class BitriseSDK {
    *   appSlug: 'your-app-slug'
    * })
    * ```
+   *
+   * @example
+   * Expo managed workflow (deployment key automatically read from native config):
+   * ```typescript
+   * BitriseSDK.configure({
+   *   apiToken: 'your-token',
+   *   appSlug: 'your-app-slug'
+   *   // deploymentKey automatically read from Info.plist/strings.xml
+   * })
+   * ```
    */
   static configure(config: BitriseConfig): void {
-    this.validateConfig(config)
-    this.config = {
+    // Auto-read deployment key and server URL from native config (Expo plugin)
+    // if not explicitly provided in the config
+    const deploymentKey = config.deploymentKey ?? ExpoConfig.getDeploymentKey() ?? undefined
+    const serverUrl =
+      config.serverUrl ?? ExpoConfig.getServerUrl() ?? 'https://api.bitrise.io'
+
+    // Create final config with auto-read values
+    const finalConfig: BitriseConfig = {
       ...config,
+      deploymentKey,
       apiEndpoint: config.apiEndpoint ?? 'https://api.bitrise.io/v0.1',
-      serverUrl: config.serverUrl ?? 'https://api.bitrise.io',
+      serverUrl,
     }
+
+    this.validateConfig(finalConfig)
+    this.config = finalConfig
+
     // Reset CodePush instance when config changes
     this._codePush = null
 
     // Initialize MetricsClient if deployment key is provided
-    if (config.deploymentKey && config.serverUrl) {
+    if (deploymentKey && serverUrl) {
       // Get or generate client ID
       // Note: This uses a session-based UUID. Apps can provide a persistent ID
       // by calling BitriseClient.setClientId() after SDK initialization.
       const appVersion = getAppVersion()
       const clientId = `session-${Date.now()}-${Math.random().toString(36).substring(7)}`
-      MetricsClient.initialize(config.serverUrl, config.deploymentKey, clientId, appVersion)
+      MetricsClient.initialize(serverUrl, deploymentKey, clientId, appVersion)
     }
 
     // Check for pending rollback on app start

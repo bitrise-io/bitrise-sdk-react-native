@@ -126,7 +126,130 @@ BitriseSDK.codePush.notifyAppReady()
 
 ## Expo Support
 
-Coming soon - full support for Expo managed workflow via config plugins.
+Full support for Expo managed workflow via config plugin! The SDK automatically integrates with Expo's prebuild system to inject deployment keys into native configuration files.
+
+### Installation (Expo Managed Workflow)
+
+1. **Install the SDK:**
+
+```bash
+npm install @bitrise/react-native-sdk
+```
+
+2. **Add the config plugin to your `app.json`:**
+
+```json
+{
+  "expo": {
+    "plugins": [
+      [
+        "@bitrise/react-native-sdk",
+        {
+          "ios": {
+            "deploymentKey": "YOUR_IOS_DEPLOYMENT_KEY",
+            "serverUrl": "https://api.bitrise.io"
+          },
+          "android": {
+            "deploymentKey": "YOUR_ANDROID_DEPLOYMENT_KEY",
+            "serverUrl": "https://api.bitrise.io"
+          }
+        }
+      ]
+    ]
+  }
+}
+```
+
+3. **Run prebuild to generate native code:**
+
+```bash
+npx expo prebuild
+```
+
+4. **Initialize the SDK in your app:**
+
+```typescript
+import { BitriseSDK } from '@bitrise/react-native-sdk'
+
+BitriseSDK.configure({
+  apiToken: 'your-api-token',
+  appSlug: 'your-app-slug'
+  // deploymentKey is automatically read from native config
+})
+```
+
+### Dynamic Configuration with Environment Variables
+
+For different environments (development, staging, production), use `app.config.js`:
+
+```javascript
+module.exports = ({ config }) => ({
+  ...config,
+  plugins: [
+    [
+      '@bitrise/react-native-sdk',
+      {
+        ios: {
+          deploymentKey: process.env.BITRISE_IOS_DEPLOYMENT_KEY,
+          serverUrl: process.env.BITRISE_SERVER_URL || 'https://api.bitrise.io',
+        },
+        android: {
+          deploymentKey: process.env.BITRISE_ANDROID_DEPLOYMENT_KEY,
+          serverUrl: process.env.BITRISE_SERVER_URL || 'https://api.bitrise.io',
+        },
+      },
+    ],
+  ],
+})
+```
+
+### EAS Build Integration
+
+Configure different deployment keys for each build profile in `eas.json`:
+
+```json
+{
+  "build": {
+    "development": {
+      "env": {
+        "BITRISE_IOS_DEPLOYMENT_KEY": "dev-ios-key",
+        "BITRISE_ANDROID_DEPLOYMENT_KEY": "dev-android-key"
+      }
+    },
+    "production": {
+      "env": {
+        "BITRISE_IOS_DEPLOYMENT_KEY": "prod-ios-key",
+        "BITRISE_ANDROID_DEPLOYMENT_KEY": "prod-android-key"
+      }
+    }
+  }
+}
+```
+
+Then build with:
+
+```bash
+eas build --profile production --platform all
+```
+
+### Expo Compatibility
+
+✅ **Supported:**
+- Expo Development Builds (`expo run:ios`, `expo run:android`)
+- EAS Build (cloud builds)
+- Bare workflow (with `expo prebuild`)
+
+❌ **Not Supported:**
+- Expo Go (requires custom native code)
+
+### Example App
+
+See the [example-expo](./example-expo) directory for a complete working example with:
+- CodePush integration
+- Progress tracking
+- Update dialogs
+- EAS Build configuration
+- Bitrise CI/CD workflow
 
 ## API Reference
 
@@ -221,6 +344,129 @@ Subscribe to queue events using `queue.on(event, callback)`:
 - `QueueEvent.ITEM_CANCELLED` - Item cancelled
 - `QueueEvent.QUEUE_EMPTIED` - Queue is now empty
 - `QueueEvent.STATUS_CHANGED` - Queue status changed
+
+## Troubleshooting
+
+### Expo Issues
+
+#### "BitriseFileSystem module not found"
+
+This error occurs when native modules aren't properly linked after adding the plugin.
+
+**Solution:**
+```bash
+npx expo prebuild --clean
+npx expo run:ios  # or expo run:android
+```
+
+#### "Deployment key not configured"
+
+The plugin configuration is missing or incorrectly formatted in `app.json`.
+
+**Solution:**
+
+Check that your `app.json` includes the plugin configuration:
+
+```json
+{
+  "expo": {
+    "plugins": [
+      [
+        "@bitrise/react-native-sdk",
+        {
+          "ios": { "deploymentKey": "YOUR_IOS_KEY" },
+          "android": { "deploymentKey": "YOUR_ANDROID_KEY" }
+        }
+      ]
+    ]
+  }
+}
+```
+
+#### Config plugin changes not taking effect
+
+Native code needs to be regenerated after plugin configuration changes.
+
+**Solution:**
+```bash
+rm -rf ios android
+npx expo prebuild
+npx expo run:ios  # or expo run:android
+```
+
+#### EAS Build fails
+
+Environment variables might not be configured correctly in `eas.json`.
+
+**Solution:**
+
+Ensure your `eas.json` includes the deployment keys:
+
+```json
+{
+  "build": {
+    "production": {
+      "env": {
+        "BITRISE_IOS_DEPLOYMENT_KEY": "your-ios-key",
+        "BITRISE_ANDROID_DEPLOYMENT_KEY": "your-android-key"
+      }
+    }
+  }
+}
+```
+
+#### Metro bundler "Unable to resolve module"
+
+Metro cache might be stale after installing the SDK.
+
+**Solution:**
+```bash
+npm start -- --clear
+# or
+npx expo start --clear
+```
+
+### General Issues
+
+#### Updates not downloading
+
+Check that:
+1. Your deployment key is correct
+2. Server URL is accessible
+3. Network connection is available
+4. The update exists on the server
+
+**Debug:**
+```typescript
+const update = await BitriseSDK.codePush.checkForUpdate()
+console.log('Update info:', update)
+```
+
+#### App crashes after update
+
+The update might be incompatible with the current native code.
+
+**Solution:**
+- Ensure you're only pushing JavaScript/asset changes
+- Binary changes require a new app store release
+- Test updates thoroughly before releasing
+
+#### Download queue statistics show high failure rate
+
+**Possible causes:**
+- Network connectivity issues
+- Server availability problems
+- Invalid package URLs
+
+**Debug:**
+```typescript
+const stats = DownloadQueue.getInstance().getStatistics()
+console.log('Stats:', stats)
+
+DownloadQueue.getInstance().on(QueueEvent.DOWNLOAD_FAILED, (data) => {
+  console.error('Download failed:', data.error)
+})
+```
 
 ## Development
 

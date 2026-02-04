@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "Bitrise SDK Example",
+    "slug": "bitrise-sdk-expo-example",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "io.bitrise.sdk.example"
+    },
+    "android": {
+      "package": "io.bitrise.sdk.example"
+    },
+    "plugins": [
+      [
+        "@bitrise/react-native-sdk",
+        {
+          "ios": {
+            "deploymentKey": "test-ios-deployment-key",
+            "serverUrl": "https://api.bitrise.io"
+          },
+          "android": {
+            "deploymentKey": "test-android-deployment-key",
+            "serverUrl": "https://api.bitrise.io"
+          }
+        }
+      ]
+    ]
+  }
+}

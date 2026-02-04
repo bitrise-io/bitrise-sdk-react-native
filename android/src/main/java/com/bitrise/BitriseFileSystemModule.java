@@ -209,4 +209,32 @@ public class BitriseFileSystemModule extends ReactContextBaseJavaModule {
             promise.reject("LIST_ERROR", e.getMessage());
         }
     }
+
+    /**
+     * Get string resource from strings.xml
+     * This is used by Expo config plugin to inject deployment keys
+     *
+     * @param resourceName The name of the string resource
+     * @return The string value or null if not found
+     */
+    @ReactMethod(isBlockingSynchronousMethod = true)
+    public String getStringResource(String resourceName) {
+        try {
+            int resId = reactContext.getResources().getIdentifier(
+                resourceName,
+                "string",
+                reactContext.getPackageName()
+            );
+
+            if (resId != 0) {
+                return reactContext.getString(resId);
+            }
+
+            return null;
+        } catch (Exception e) {
+            // Return null on any error
+            // This allows graceful fallback when the resource doesn't exist
+            return null;
+        }
+    }
 }
