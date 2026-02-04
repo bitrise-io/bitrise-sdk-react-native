@@ -2,6 +2,8 @@ import type { LocalPackage, Package } from '../types/package'
 import { InstallMode } from '../types/enums'
 import { UpdateError } from '../types/errors'
 import { PackageStorage } from '../storage/PackageStorage'
+import { RestartQueue } from './RestartQueue'
+import { restartApp } from '../native/Restart'
 
 /**
  * Implementation of LocalPackage interface
@@ -92,11 +94,12 @@ export class LocalPackageImpl implements LocalPackage {
         minimumBackgroundDuration,
       })
 
-      // Handle IMMEDIATE mode - trigger restart
+      // Handle IMMEDIATE mode - trigger restart (respects RestartQueue)
       if (mode === InstallMode.IMMEDIATE) {
-        // TODO: Implement proper restart trigger in Phase 5
-        // For now, log a message - app will apply update on next natural restart
-        console.log('[CodePush] Immediate restart requested. Call restartApp() to apply update.')
+        const restartQueue = RestartQueue.getInstance()
+        restartQueue.queueRestart(() => {
+          restartApp()
+        })
       }
     } catch (error) {
       if (error instanceof UpdateError) {

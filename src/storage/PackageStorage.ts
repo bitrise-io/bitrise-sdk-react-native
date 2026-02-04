@@ -96,6 +96,18 @@ export class PackageStorage {
   }
 
   /**
+   * Set the list of failed update hashes
+   * Allows removing specific hashes or updating the entire list
+   */
+  static async setFailedUpdates(hashes: string[]): Promise<void> {
+    if (hashes.length === 0) {
+      this.cache.delete(STORAGE_KEYS.FAILED_UPDATES)
+    } else {
+      this.cache.set(STORAGE_KEYS.FAILED_UPDATES, JSON.stringify(hashes))
+    }
+  }
+
+  /**
    * Clear failed updates list
    */
   static async clearFailedUpdates(): Promise<void> {

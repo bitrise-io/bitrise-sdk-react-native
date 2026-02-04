@@ -1,14 +1,25 @@
 import { CodePush } from '../CodePush'
 import { BitriseClient } from '../../network/BitriseClient'
 import { PackageStorage } from '../../storage/PackageStorage'
-import { ConfigurationError } from '../../types/errors'
-import { UpdateState } from '../../types/enums'
+import { ConfigurationError, UpdateError } from '../../types/errors'
+import { UpdateState, SyncStatus } from '../../types/enums'
 import type { BitriseConfig } from '../../types/config'
 import type { RemotePackage, Package } from '../../types/package'
+import { RestartQueue } from '../RestartQueue'
+import { Alert } from 'react-native'
 
 // Mock dependencies
 jest.mock('../../network/BitriseClient')
 jest.mock('../../storage/PackageStorage')
+jest.mock('../RestartQueue')
+jest.mock('../../native/Restart', () => ({
+  restartApp: jest.fn(),
+}))
+jest.mock('react-native', () => ({
+  Alert: {
+    alert: jest.fn(),
+  },
+}))
 jest.mock('../../utils/platform', () => ({
   getAppVersion: () => '1.0.0',
 }))
@@ -27,6 +38,8 @@ describe('CodePush', () => {
     codePush = new CodePush(mockConfig)
     jest.clearAllMocks()
     jest.spyOn(console, 'warn').mockImplementation()
+    // Default mock for getFailedUpdates to prevent undefined errors
+    ;(PackageStorage.getFailedUpdates as jest.Mock).mockResolvedValue([])
   })
 
   afterEach(() => {
@@ -232,16 +245,28 @@ describe('CodePush', () => {
   })
 
   describe('restartApp', () => {
-    it('should log warning about native restart not implemented', async () => {
+    let mockRestartQueue: any
+
+    beforeEach(() => {
+      mockRestartQueue = {
+        queueRestart: jest.fn(fn => fn()), // Execute immediately
+        allowRestart: jest.fn(),
+        disallowRestart: jest.fn(),
+        clearQueue: jest.fn(),
+        isRestartAllowed: jest.fn(() => true),
+      }
+      ;(RestartQueue.getInstance as jest.Mock).mockReturnValue(mockRestartQueue)
+    })
+
+    it('should use RestartQueue to restart', async () => {
       ;(PackageStorage.getPendingPackage as jest.Mock).mockResolvedValue({
         packageHash: 'test123',
       })
 
       await codePush.restartApp()
 
-      expect(console.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Restart required to apply update')
-      )
+      expect(RestartQueue.getInstance).toHaveBeenCalled()
+      expect(mockRestartQueue.queueRestart).toHaveBeenCalledWith(expect.any(Function))
     })
 
     it('should not restart if onlyIfUpdateIsPending is true and no pending update', async () => {
@@ -249,7 +274,7 @@ describe('CodePush', () => {
 
       await codePush.restartApp(true)
 
-      expect(console.warn).not.toHaveBeenCalled()
+      expect(mockRestartQueue.queueRestart).not.toHaveBeenCalled()
     })
 
     it('should restart if onlyIfUpdateIsPending is true and update is pending', async () => {
@@ -259,9 +284,8 @@ describe('CodePush', () => {
 
       await codePush.restartApp(true)
 
-      expect(console.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Restart required to apply update')
-      )
+      expect(RestartQueue.getInstance).toHaveBeenCalled()
+      expect(mockRestartQueue.queueRestart).toHaveBeenCalledWith(expect.any(Function))
     })
   })
 
@@ -581,12 +605,13 @@ describe('CodePush', () => {
         ;(PackageStorage.getCurrentPackage as jest.Mock).mockResolvedValue(currentPackage)
         ;(PackageStorage.getPendingPackage as jest.Mock).mockResolvedValue(null)
         ;(PackageStorage.getFailedUpdates as jest.Mock).mockResolvedValue(['hash123'])
+        ;(PackageStorage.setFailedUpdates as jest.Mock).mockResolvedValue(undefined)
 
         codePush.notifyAppReady()
 
         await new Promise(resolve => setTimeout(resolve, 10))
 
-        expect(PackageStorage.clearFailedUpdates).toHaveBeenCalled()
+        expect(PackageStorage.setFailedUpdates).toHaveBeenCalledWith([])
       })
     })
 
@@ -697,17 +722,408 @@ describe('CodePush', () => {
     })
   })
 
-  describe('unimplemented methods', () => {
-    it('allowRestart should throw', () => {
-      expect(() => codePush.allowRestart()).toThrow('not yet implemented')
+  describe('Phase 5: allowRestart', () => {
+    let mockRestartQueue: any
+
+    beforeEach(() => {
+      mockRestartQueue = {
+        allowRestart: jest.fn(),
+        disallowRestart: jest.fn(),
+        queueRestart: jest.fn(),
+        clearQueue: jest.fn(),
+        isRestartAllowed: jest.fn(() => true),
+      }
+      ;(RestartQueue.getInstance as jest.Mock).mockReturnValue(mockRestartQueue)
     })
 
-    it('disallowRestart should throw', () => {
-      expect(() => codePush.disallowRestart()).toThrow('not yet implemented')
+    it('should call RestartQueue.allowRestart', () => {
+      codePush.allowRestart()
+
+      expect(RestartQueue.getInstance).toHaveBeenCalled()
+      expect(mockRestartQueue.allowRestart).toHaveBeenCalled()
     })
 
-    it('clearUpdates should throw', async () => {
-      await expect(codePush.clearUpdates()).rejects.toThrow('not yet implemented')
+    it('should execute queued restart when called', () => {
+      const restartFn = jest.fn()
+      mockRestartQueue.queueRestart.mockImplementation((fn: () => void) => fn())
+
+      codePush.allowRestart()
+      mockRestartQueue.queueRestart(restartFn)
+
+      expect(restartFn).toHaveBeenCalled()
+    })
+  })
+
+  describe('Phase 5: disallowRestart', () => {
+    let mockRestartQueue: any
+
+    beforeEach(() => {
+      mockRestartQueue = {
+        allowRestart: jest.fn(),
+        disallowRestart: jest.fn(),
+        queueRestart: jest.fn(),
+        clearQueue: jest.fn(),
+        isRestartAllowed: jest.fn(() => false),
+      }
+      ;(RestartQueue.getInstance as jest.Mock).mockReturnValue(mockRestartQueue)
+    })
+
+    it('should call RestartQueue.disallowRestart', () => {
+      codePush.disallowRestart()
+
+      expect(RestartQueue.getInstance).toHaveBeenCalled()
+      expect(mockRestartQueue.disallowRestart).toHaveBeenCalled()
+    })
+
+    it('should prevent restarts from executing', () => {
+      const restartFn = jest.fn()
+      mockRestartQueue.queueRestart.mockImplementation((_fn: () => void) => {
+        // Queue instead of execute
+      })
+
+      codePush.disallowRestart()
+      mockRestartQueue.queueRestart(restartFn)
+
+      expect(restartFn).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('Phase 5: restartApp with RestartQueue', () => {
+    let mockRestartQueue: any
+
+    beforeEach(() => {
+      mockRestartQueue = {
+        allowRestart: jest.fn(),
+        disallowRestart: jest.fn(),
+        queueRestart: jest.fn(fn => fn()), // Execute immediately by default
+        clearQueue: jest.fn(),
+        isRestartAllowed: jest.fn(() => true),
+      }
+      ;(RestartQueue.getInstance as jest.Mock).mockReturnValue(mockRestartQueue)
+    })
+
+    it('should use RestartQueue to queue restart', async () => {
+      ;(PackageStorage.getPendingPackage as jest.Mock).mockResolvedValue({
+        packageHash: 'test123',
+      })
+
+      await codePush.restartApp()
+
+      expect(RestartQueue.getInstance).toHaveBeenCalled()
+      expect(mockRestartQueue.queueRestart).toHaveBeenCalledWith(expect.any(Function))
+    })
+
+    it('should respect onlyIfUpdateIsPending flag', async () => {
+      ;(PackageStorage.getPendingPackage as jest.Mock).mockResolvedValue(null)
+
+      await codePush.restartApp(true)
+
+      expect(mockRestartQueue.queueRestart).not.toHaveBeenCalled()
+    })
+
+    it('should restart when update is pending and flag is true', async () => {
+      ;(PackageStorage.getPendingPackage as jest.Mock).mockResolvedValue({
+        packageHash: 'test123',
+      })
+
+      await codePush.restartApp(true)
+
+      expect(mockRestartQueue.queueRestart).toHaveBeenCalled()
+    })
+  })
+
+  describe('Phase 5: clearUpdates', () => {
+    beforeEach(() => {
+      jest.spyOn(console, 'log').mockImplementation()
+      jest.spyOn(console, 'error').mockImplementation()
+    })
+
+    it('should clear all package data and metadata', async () => {
+      const currentPackage = { packageHash: 'hash1', label: 'v1' }
+      const pendingPackage = { packageHash: 'hash2', label: 'v2' }
+
+      ;(PackageStorage.getCurrentPackage as jest.Mock).mockResolvedValue(currentPackage)
+      ;(PackageStorage.getPendingPackage as jest.Mock).mockResolvedValue(pendingPackage)
+      ;(PackageStorage.deletePackageData as jest.Mock).mockResolvedValue(undefined)
+      ;(PackageStorage.clearPendingPackage as jest.Mock).mockResolvedValue(undefined)
+      ;(PackageStorage.clearFailedUpdates as jest.Mock).mockResolvedValue(undefined)
+
+      await codePush.clearUpdates()
+
+      expect(PackageStorage.deletePackageData).toHaveBeenCalledWith('hash1')
+      expect(PackageStorage.deletePackageData).toHaveBeenCalledWith('hash2')
+      expect(PackageStorage.clearPendingPackage).toHaveBeenCalled()
+      expect(PackageStorage.clearFailedUpdates).toHaveBeenCalled()
+      expect(console.log).toHaveBeenCalledWith('[CodePush] Cleared all updates')
+    })
+
+    it('should handle no packages gracefully', async () => {
+      ;(PackageStorage.getCurrentPackage as jest.Mock).mockResolvedValue(null)
+      ;(PackageStorage.getPendingPackage as jest.Mock).mockResolvedValue(null)
+
+      await codePush.clearUpdates()
+
+      expect(PackageStorage.deletePackageData).not.toHaveBeenCalled()
+      expect(PackageStorage.clearPendingPackage).toHaveBeenCalled()
+      expect(PackageStorage.clearFailedUpdates).toHaveBeenCalled()
+    })
+
+    it('should throw UpdateError on failure', async () => {
+      const error = new Error('Storage error')
+      ;(PackageStorage.getCurrentPackage as jest.Mock).mockRejectedValue(error)
+
+      await expect(codePush.clearUpdates()).rejects.toThrow(UpdateError)
+      await expect(codePush.clearUpdates()).rejects.toThrow('Failed to clear updates')
+
+      expect(console.error).toHaveBeenCalledWith('[CodePush] Failed to clear updates:', error)
+    })
+
+    it('should handle only current package', async () => {
+      const currentPackage = { packageHash: 'hash1' }
+      ;(PackageStorage.getCurrentPackage as jest.Mock).mockResolvedValue(currentPackage)
+      ;(PackageStorage.getPendingPackage as jest.Mock).mockResolvedValue(null)
+
+      await codePush.clearUpdates()
+
+      expect(PackageStorage.deletePackageData).toHaveBeenCalledWith('hash1')
+      expect(PackageStorage.deletePackageData).toHaveBeenCalledTimes(1)
+    })
+
+    it('should handle only pending package', async () => {
+      const pendingPackage = { packageHash: 'hash2' }
+      ;(PackageStorage.getCurrentPackage as jest.Mock).mockResolvedValue(null)
+      ;(PackageStorage.getPendingPackage as jest.Mock).mockResolvedValue(pendingPackage)
+
+      await codePush.clearUpdates()
+
+      expect(PackageStorage.deletePackageData).toHaveBeenCalledWith('hash2')
+      expect(PackageStorage.deletePackageData).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('Phase 5: Update Dialog', () => {
+    const mockRemotePackage: RemotePackage = {
+      appVersion: '1.0.0',
+      deploymentKey: 'test-key',
+      description: 'Bug fixes and improvements',
+      failedInstall: false,
+      isFirstRun: false,
+      isMandatory: false,
+      isPending: false,
+      label: 'v2',
+      packageHash: 'hash456',
+      packageSize: 2048,
+      downloadUrl: 'https://example.com/package.zip',
+      download: jest.fn(),
+    }
+
+    const mockLocalPackage = {
+      ...mockRemotePackage,
+      localPath: '/tmp/package',
+      install: jest.fn(),
+    }
+
+    beforeEach(() => {
+      mockRemotePackage.download.mockResolvedValue(mockLocalPackage)
+      mockLocalPackage.install.mockResolvedValue(undefined)
+      ;(BitriseClient.prototype.checkForUpdate as jest.Mock).mockResolvedValue(mockRemotePackage)
+      ;(PackageStorage.getFailedUpdates as jest.Mock).mockResolvedValue([])
+    })
+
+    it('should show dialog for optional updates', async () => {
+      ;(Alert.alert as jest.Mock).mockImplementation((title, message, buttons) => {
+        buttons[1].onPress() // User clicks "Install"
+      })
+
+      const status = await codePush.sync({
+        updateDialog: true,
+      })
+
+      expect(Alert.alert).toHaveBeenCalledWith(
+        'Update available',
+        'An update is available. Would you like to install it?',
+        expect.arrayContaining([
+          expect.objectContaining({ text: 'Not Now', style: 'cancel' }),
+          expect.objectContaining({ text: 'Install' }),
+        ])
+      )
+      expect(status).toBe(SyncStatus.UPDATE_INSTALLED)
+    })
+
+    it('should return UPDATE_IGNORED when user declines', async () => {
+      ;(Alert.alert as jest.Mock).mockImplementation((title, message, buttons) => {
+        buttons[0].onPress() // User clicks "Not Now"
+      })
+
+      const status = await codePush.sync({
+        updateDialog: true,
+      })
+
+      expect(status).toBe(SyncStatus.UPDATE_IGNORED)
+      expect(mockRemotePackage.download).not.toHaveBeenCalled()
+    })
+
+    it('should not show dialog for mandatory updates', async () => {
+      const mandatoryPackage = { ...mockRemotePackage, isMandatory: true }
+      ;(BitriseClient.prototype.checkForUpdate as jest.Mock).mockResolvedValue(mandatoryPackage)
+      mandatoryPackage.download.mockResolvedValue(mockLocalPackage)
+
+      const status = await codePush.sync({
+        updateDialog: true,
+      })
+
+      expect(Alert.alert).not.toHaveBeenCalled()
+      expect(status).toBe(SyncStatus.UPDATE_INSTALLED)
+    })
+
+    it('should support custom dialog options', async () => {
+      ;(Alert.alert as jest.Mock).mockImplementation((title, message, buttons) => {
+        buttons[1].onPress()
+      })
+
+      await codePush.sync({
+        updateDialog: {
+          title: 'New Version',
+          optionalUpdateMessage: 'Update now?',
+          optionalInstallButtonLabel: 'Yes',
+          optionalIgnoreButtonLabel: 'No',
+        },
+      })
+
+      expect(Alert.alert).toHaveBeenCalledWith(
+        'New Version',
+        'Update now?',
+        expect.arrayContaining([
+          expect.objectContaining({ text: 'No', style: 'cancel' }),
+          expect.objectContaining({ text: 'Yes' }),
+        ])
+      )
+    })
+
+    it('should append release description when configured', async () => {
+      ;(Alert.alert as jest.Mock).mockImplementation((title, message, buttons) => {
+        buttons[1].onPress()
+      })
+
+      await codePush.sync({
+        updateDialog: {
+          appendReleaseDescription: true,
+        },
+      })
+
+      expect(Alert.alert).toHaveBeenCalledWith(
+        'Update available',
+        expect.stringContaining('Release notes:'),
+        expect.any(Array)
+      )
+      expect(Alert.alert).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.stringContaining('Bug fixes and improvements'),
+        expect.any(Array)
+      )
+    })
+
+    it('should use custom description prefix', async () => {
+      ;(Alert.alert as jest.Mock).mockImplementation((title, message, buttons) => {
+        buttons[1].onPress()
+      })
+
+      await codePush.sync({
+        updateDialog: {
+          appendReleaseDescription: true,
+          descriptionPrefix: "\n\nWhat's new:\n",
+        },
+      })
+
+      expect(Alert.alert).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.stringContaining("What's new:"),
+        expect.any(Array)
+      )
+    })
+
+    it('should handle boolean updateDialog option', async () => {
+      ;(Alert.alert as jest.Mock).mockImplementation((title, message, buttons) => {
+        buttons[1].onPress()
+      })
+
+      await codePush.sync({
+        updateDialog: true,
+      })
+
+      expect(Alert.alert).toHaveBeenCalledWith(
+        'Update available',
+        expect.any(String),
+        expect.any(Array)
+      )
+    })
+
+    it('should not append description if not present', async () => {
+      const packageWithoutDesc = { ...mockRemotePackage, description: '' }
+      ;(BitriseClient.prototype.checkForUpdate as jest.Mock).mockResolvedValue(packageWithoutDesc)
+      packageWithoutDesc.download.mockResolvedValue(mockLocalPackage)
+      ;(Alert.alert as jest.Mock).mockImplementation((title, message, buttons) => {
+        buttons[1].onPress()
+      })
+
+      await codePush.sync({
+        updateDialog: {
+          appendReleaseDescription: true,
+        },
+      })
+
+      expect(Alert.alert).toHaveBeenCalledWith(
+        expect.any(String),
+        'An update is available. Would you like to install it?',
+        expect.any(Array)
+      )
+    })
+  })
+
+  describe('Phase 5: notifyAppReady with setFailedUpdates', () => {
+    beforeEach(() => {
+      jest.spyOn(console, 'error').mockImplementation()
+    })
+
+    it('should use setFailedUpdates to remove current package hash', async () => {
+      const currentPackage = { packageHash: 'hash123' }
+      ;(PackageStorage.getCurrentPackage as jest.Mock).mockResolvedValue(currentPackage)
+      ;(PackageStorage.getPendingPackage as jest.Mock).mockResolvedValue(null)
+      ;(PackageStorage.getFailedUpdates as jest.Mock).mockResolvedValue(['hash123', 'hash456'])
+      ;(PackageStorage.setFailedUpdates as jest.Mock).mockResolvedValue(undefined)
+
+      codePush.notifyAppReady()
+
+      await new Promise(resolve => setTimeout(resolve, 10))
+
+      expect(PackageStorage.setFailedUpdates).toHaveBeenCalledWith(['hash456'])
+    })
+
+    it('should call setFailedUpdates with empty array when only one hash', async () => {
+      const currentPackage = { packageHash: 'hash123' }
+      ;(PackageStorage.getCurrentPackage as jest.Mock).mockResolvedValue(currentPackage)
+      ;(PackageStorage.getPendingPackage as jest.Mock).mockResolvedValue(null)
+      ;(PackageStorage.getFailedUpdates as jest.Mock).mockResolvedValue(['hash123'])
+      ;(PackageStorage.setFailedUpdates as jest.Mock).mockResolvedValue(undefined)
+
+      codePush.notifyAppReady()
+
+      await new Promise(resolve => setTimeout(resolve, 10))
+
+      expect(PackageStorage.setFailedUpdates).toHaveBeenCalledWith([])
+    })
+
+    it('should not call setFailedUpdates if package not in failed list', async () => {
+      const currentPackage = { packageHash: 'hash123' }
+      ;(PackageStorage.getCurrentPackage as jest.Mock).mockResolvedValue(currentPackage)
+      ;(PackageStorage.getPendingPackage as jest.Mock).mockResolvedValue(null)
+      ;(PackageStorage.getFailedUpdates as jest.Mock).mockResolvedValue(['hash456'])
+
+      codePush.notifyAppReady()
+
+      await new Promise(resolve => setTimeout(resolve, 10))
+
+      expect(PackageStorage.setFailedUpdates).not.toHaveBeenCalled()
     })
   })
 })

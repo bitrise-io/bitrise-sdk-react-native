@@ -1,10 +1,19 @@
+import { Alert } from 'react-native'
 import type { BitriseConfig } from '../types/config'
-import type { RemotePackage, SyncOptions, Configuration, Package } from '../types/package'
+import type {
+  RemotePackage,
+  SyncOptions,
+  Configuration,
+  Package,
+  UpdateDialogOptions,
+} from '../types/package'
 import { SyncStatus, UpdateState } from '../types/enums'
-import { ConfigurationError } from '../types/errors'
+import { ConfigurationError, UpdateError } from '../types/errors'
 import { BitriseClient } from '../network/BitriseClient'
 import { PackageStorage } from '../storage/PackageStorage'
 import { getAppVersion } from '../utils/platform'
+import { RestartQueue } from './RestartQueue'
+import { restartApp as nativeRestart } from '../native/Restart'
 
 /**
  * CodePush functionality for over-the-air updates
@@ -137,6 +146,54 @@ export class CodePush {
   }
 
   /**
+   * Show native alert for optional updates
+   * Only called for non-mandatory updates with updateDialog option
+   */
+  private async showUpdateDialog(
+    options: UpdateDialogOptions | boolean,
+    remotePackage: RemotePackage
+  ): Promise<boolean> {
+    const dialogOptions = typeof options === 'boolean' ? {} : options
+
+    return new Promise(resolve => {
+      const message = this.buildDialogMessage(dialogOptions, remotePackage)
+      const title = dialogOptions.title || 'Update available'
+
+      const buttons = [
+        {
+          text: dialogOptions.optionalIgnoreButtonLabel || 'Not Now',
+          onPress: () => resolve(false),
+          style: 'cancel' as const,
+        },
+        {
+          text: dialogOptions.optionalInstallButtonLabel || 'Install',
+          onPress: () => resolve(true),
+        },
+      ]
+
+      Alert.alert(title, message, buttons)
+    })
+  }
+
+  /**
+   * Build dialog message with optional release notes
+   */
+  private buildDialogMessage(
+    options: Partial<UpdateDialogOptions>,
+    remotePackage: RemotePackage
+  ): string {
+    const baseMessage =
+      options.optionalUpdateMessage || 'An update is available. Would you like to install it?'
+
+    if (options.appendReleaseDescription && remotePackage.description) {
+      const prefix = options.descriptionPrefix || '\n\nRelease notes:\n'
+      return baseMessage + prefix + remotePackage.description
+    }
+
+    return baseMessage
+  }
+
+  /**
    * Synchronize the app with the latest update
    * Compatible with react-native-code-push sync() method
    *
@@ -201,13 +258,13 @@ export class CodePush {
         }
       }
 
-      // TODO Phase 5: Show update dialog if configured
-      // if (options?.updateDialog && !remotePackage.isMandatory) {
-      //   const userApproved = await this.showUpdateDialog(options.updateDialog, remotePackage)
-      //   if (!userApproved) {
-      //     return SyncStatus.UPDATE_IGNORED
-      //   }
-      // }
+      // PHASE 5: Show update dialog if configured
+      if (options?.updateDialog && !remotePackage.isMandatory) {
+        const userApproved = await this.showUpdateDialog(options.updateDialog, remotePackage)
+        if (!userApproved) {
+          return SyncStatus.UPDATE_IGNORED
+        }
+      }
 
       // PHASE 5: Download package
       const localPackage = await remotePackage.download()
@@ -298,12 +355,7 @@ export class CodePush {
       const failedUpdates = await PackageStorage.getFailedUpdates()
       if (failedUpdates.includes(currentPackage.packageHash)) {
         const updated = failedUpdates.filter(hash => hash !== currentPackage.packageHash)
-        if (updated.length === 0) {
-          await PackageStorage.clearFailedUpdates()
-        } else {
-          // TODO Phase 5: Add setFailedUpdates() method to PackageStorage
-          // For now, leave partial list as-is (not blocking Phase 4 MVP)
-        }
+        await PackageStorage.setFailedUpdates(updated)
       }
 
       // TODO Phase 6: Report success metrics to Bitrise server
@@ -320,6 +372,9 @@ export class CodePush {
 
   /**
    * Restart the app to apply a pending update
+   *
+   * Respects restart queue - if restarts are disallowed, the restart will be queued.
+   * Call allowRestart() to execute the queued restart.
    *
    * @param onlyIfUpdateIsPending - Only restart if an update is pending (default: false)
    *
@@ -342,39 +397,89 @@ export class CodePush {
       }
     }
 
-    // TODO: Implement native restart bridge
-    // For MVP, log warning that restart is required manually
-    // Future enhancement: Add native module for platform-specific restart
-    // iOS: Use RCTReloadCommand or RCTBridge reload
-    // Android: Use ReactInstanceManager recreateReactContextInBackground
-    console.warn(
-      '[CodePush] Restart required to apply update. ' +
-        'Native restart not yet implemented. ' +
-        'Please restart the app manually or use developer menu reload.'
-    )
+    // Use RestartQueue to respect disallowRestart() calls
+    const restartQueue = RestartQueue.getInstance()
+    restartQueue.queueRestart(() => {
+      nativeRestart()
+    })
   }
 
   /**
    * Allow queued restarts to proceed
+   *
+   * If a restart was queued while disallowed, it will execute immediately.
+   * Use this after critical operations complete.
+   *
+   * @example
+   * ```typescript
+   * codePush.disallowRestart()
+   * await processPayment()
+   * codePush.allowRestart() // Any queued restart will execute now
+   * ```
    */
   allowRestart(): void {
-    // TODO: Implement in Phase 5
-    throw new Error('allowRestart not yet implemented')
+    RestartQueue.getInstance().allowRestart()
   }
 
   /**
    * Prevent restarts and queue them instead
+   *
+   * Call this during critical operations (payments, transactions, animations).
+   * Restarts will be queued and execute when allowRestart() is called.
+   *
+   * @example
+   * ```typescript
+   * codePush.disallowRestart()
+   * await processPayment()
+   * codePush.allowRestart()
+   * ```
    */
   disallowRestart(): void {
-    // TODO: Implement in Phase 5
-    throw new Error('disallowRestart not yet implemented')
+    RestartQueue.getInstance().disallowRestart()
   }
 
   /**
-   * Clear all downloaded updates
+   * Clear all downloaded updates to free disk space
+   *
+   * Deletes package data and clears metadata for all packages.
+   * Useful for storage management.
+   *
+   * @example
+   * ```typescript
+   * await codePush.clearUpdates()
+   * console.log('All updates cleared')
+   * ```
    */
   async clearUpdates(): Promise<void> {
-    // TODO: Implement in Phase 5
-    throw new Error('clearUpdates not yet implemented')
+    try {
+      // Get all packages to clean up
+      const currentPackage = await PackageStorage.getCurrentPackage()
+      const pendingPackage = await PackageStorage.getPendingPackage()
+
+      // Collect all package hashes
+      const hashes: string[] = []
+      if (currentPackage) {
+        hashes.push(currentPackage.packageHash)
+      }
+      if (pendingPackage) {
+        hashes.push(pendingPackage.packageHash)
+      }
+
+      // Delete package data for all packages
+      for (const hash of hashes) {
+        await PackageStorage.deletePackageData(hash)
+      }
+
+      // Clear all metadata
+      await PackageStorage.clearPendingPackage()
+      await PackageStorage.clearFailedUpdates()
+
+      console.log('[CodePush] Cleared all updates')
+    } catch (error) {
+      console.error('[CodePush] Failed to clear updates:', error)
+      throw new UpdateError('Failed to clear updates', {
+        originalError: error instanceof Error ? error.message : String(error),
+      })
+    }
   }
 }

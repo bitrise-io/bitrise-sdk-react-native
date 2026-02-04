@@ -135,6 +135,47 @@ describe('PackageStorage', () => {
     })
   })
 
+  describe('setFailedUpdates', () => {
+    it('should set failed updates list', async () => {
+      await PackageStorage.setFailedUpdates(['hash1', 'hash2', 'hash3'])
+
+      const result = await PackageStorage.getFailedUpdates()
+      expect(result).toEqual(['hash1', 'hash2', 'hash3'])
+    })
+
+    it('should replace existing failed updates', async () => {
+      await PackageStorage.markUpdateFailed('hash1')
+      await PackageStorage.markUpdateFailed('hash2')
+
+      await PackageStorage.setFailedUpdates(['hash3', 'hash4'])
+
+      const result = await PackageStorage.getFailedUpdates()
+      expect(result).toEqual(['hash3', 'hash4'])
+    })
+
+    it('should clear storage when empty array provided', async () => {
+      await PackageStorage.markUpdateFailed('hash1')
+      await PackageStorage.markUpdateFailed('hash2')
+
+      await PackageStorage.setFailedUpdates([])
+
+      const result = await PackageStorage.getFailedUpdates()
+      expect(result).toEqual([])
+    })
+
+    it('should allow removing specific hashes', async () => {
+      await PackageStorage.setFailedUpdates(['hash1', 'hash2', 'hash3'])
+
+      // Remove hash2
+      const current = await PackageStorage.getFailedUpdates()
+      const updated = current.filter(h => h !== 'hash2')
+      await PackageStorage.setFailedUpdates(updated)
+
+      const result = await PackageStorage.getFailedUpdates()
+      expect(result).toEqual(['hash1', 'hash3'])
+    })
+  })
+
   describe('clearFailedUpdates', () => {
     it('should clear all failed updates', async () => {
       await PackageStorage.markUpdateFailed('hash1')

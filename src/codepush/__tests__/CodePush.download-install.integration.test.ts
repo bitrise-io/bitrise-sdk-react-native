@@ -5,11 +5,15 @@ import { PackageStorage } from '../../storage/PackageStorage'
 import { InstallMode } from '../../types/enums'
 import type { BitriseConfig } from '../../types/config'
 import * as fileUtils from '../../utils/file'
+import { RestartQueue } from '../RestartQueue'
+import { restartApp } from '../../native/Restart'
 
 // Mock dependencies
 jest.mock('../../network/BitriseClient')
 jest.mock('../../storage/PackageStorage')
 jest.mock('../../utils/file')
+jest.mock('../RestartQueue')
+jest.mock('../../native/Restart')
 jest.mock('../../utils/platform', () => ({
   getAppVersion: jest.fn().mockReturnValue('1.0.0'),
 }))
@@ -39,6 +43,17 @@ describe('CodePush Download & Install Integration', () => {
     ;(PackageStorage.getPackageData as jest.Mock).mockResolvedValue('base64data')
     ;(PackageStorage.setPendingPackage as jest.Mock).mockResolvedValue(undefined)
     ;(PackageStorage.setInstallMetadata as jest.Mock).mockResolvedValue(undefined)
+    ;(PackageStorage.getFailedUpdates as jest.Mock).mockResolvedValue([])
+
+    // Mock RestartQueue
+    const mockRestartQueue = {
+      queueRestart: jest.fn(fn => fn()), // Execute immediately
+      allowRestart: jest.fn(),
+      disallowRestart: jest.fn(),
+      clearQueue: jest.fn(),
+      isRestartAllowed: jest.fn(() => true),
+    }
+    ;(RestartQueue.getInstance as jest.Mock).mockReturnValue(mockRestartQueue)
 
     // Reset download in progress flag
     // @ts-expect-error - Accessing private static field for testing
@@ -128,9 +143,9 @@ describe('CodePush Download & Install Integration', () => {
 
       await codePush.restartApp(true)
 
-      expect(console.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Restart required to apply update')
-      )
+      // Should call RestartQueue and restartApp
+      expect(RestartQueue.getInstance).toHaveBeenCalled()
+      expect(restartApp).toHaveBeenCalled()
     })
 
     it('should handle immediate install and restart', async () => {
@@ -179,9 +194,9 @@ describe('CodePush Download & Install Integration', () => {
       const localPackage = await update!.download()
       await localPackage.install(InstallMode.IMMEDIATE)
 
-      expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('Immediate restart requested')
-      )
+      // Should trigger restart via RestartQueue
+      expect(RestartQueue.getInstance).toHaveBeenCalled()
+      expect(restartApp).toHaveBeenCalled()
     })
 
     it('should skip restart if no pending update', async () => {

@@ -2,8 +2,12 @@ import { LocalPackageImpl } from '../LocalPackageImpl'
 import { InstallMode } from '../../types/enums'
 import { UpdateError } from '../../types/errors'
 import { PackageStorage } from '../../storage/PackageStorage'
+import { RestartQueue } from '../RestartQueue'
+import { restartApp } from '../../native/Restart'
 
 jest.mock('../../storage/PackageStorage')
+jest.mock('../RestartQueue')
+jest.mock('../../native/Restart')
 
 describe('LocalPackageImpl', () => {
   const mockPackageData = {
@@ -62,7 +66,14 @@ describe('LocalPackageImpl', () => {
 
     it('should install with IMMEDIATE mode', async () => {
       const pkg = new LocalPackageImpl(mockPackageData)
-
+      const mockRestartQueue = {
+        queueRestart: jest.fn(fn => fn()), // Execute immediately
+        allowRestart: jest.fn(),
+        disallowRestart: jest.fn(),
+        clearQueue: jest.fn(),
+        isRestartAllowed: jest.fn(() => true),
+      }
+      ;(RestartQueue.getInstance as jest.Mock).mockReturnValue(mockRestartQueue)
       ;(PackageStorage.getPackageData as jest.Mock).mockResolvedValue('base64data')
       ;(PackageStorage.setPendingPackage as jest.Mock).mockResolvedValue(undefined)
       ;(PackageStorage.setInstallMetadata as jest.Mock).mockResolvedValue(undefined)
@@ -74,9 +85,8 @@ describe('LocalPackageImpl', () => {
         timestamp: expect.any(Number),
         minimumBackgroundDuration: undefined,
       })
-      expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('Immediate restart requested')
-      )
+      expect(mockRestartQueue.queueRestart).toHaveBeenCalledWith(expect.any(Function))
+      expect(restartApp).toHaveBeenCalled()
     })
 
     it('should install with ON_NEXT_RESUME mode', async () => {
