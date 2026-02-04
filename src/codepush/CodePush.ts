@@ -503,4 +503,18 @@ export class CodePush {
       })
     }
   }
+
+  /**
+   * Custom JSON serialization to prevent exposing sensitive data
+   * Deployment keys and tokens should never appear in logs or error reports
+   * @internal
+   */
+  toJSON(): object {
+    return {
+      serverUrl: this.bitriseConfig.serverUrl,
+      configured: !!this.client,
+      notifyAppReadyCalled: this.notifyAppReadyCalled,
+      isSyncing: this.isSyncing,
+    }
+  }
 }
