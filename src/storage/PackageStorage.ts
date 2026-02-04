@@ -7,6 +7,8 @@ const STORAGE_KEYS = {
   CURRENT_PACKAGE: '@bitrise/codepush/currentPackage',
   PENDING_PACKAGE: '@bitrise/codepush/pendingPackage',
   FAILED_UPDATES: '@bitrise/codepush/failedUpdates',
+  PACKAGE_DATA_PREFIX: '@bitrise/codepush/packageData/',
+  INSTALL_METADATA_PREFIX: '@bitrise/codepush/installMetadata/',
 } as const
 
 /**
@@ -105,5 +107,58 @@ export class PackageStorage {
    */
   static async clear(): Promise<void> {
     this.cache.clear()
+  }
+
+  /**
+   * Store package binary data (base64 encoded)
+   */
+  static async setPackageData(packageHash: string, base64Data: string): Promise<void> {
+    const key = `${STORAGE_KEYS.PACKAGE_DATA_PREFIX}${packageHash}`
+    this.cache.set(key, base64Data)
+  }
+
+  /**
+   * Retrieve package binary data
+   */
+  static async getPackageData(packageHash: string): Promise<string | null> {
+    const key = `${STORAGE_KEYS.PACKAGE_DATA_PREFIX}${packageHash}`
+    return this.cache.get(key) || null
+  }
+
+  /**
+   * Delete package binary data
+   */
+  static async deletePackageData(packageHash: string): Promise<void> {
+    const key = `${STORAGE_KEYS.PACKAGE_DATA_PREFIX}${packageHash}`
+    this.cache.delete(key)
+  }
+
+  /**
+   * Store install metadata for a package
+   */
+  static async setInstallMetadata(
+    packageHash: string,
+    metadata: { installMode: number; timestamp: number; minimumBackgroundDuration?: number }
+  ): Promise<void> {
+    const key = `${STORAGE_KEYS.INSTALL_METADATA_PREFIX}${packageHash}`
+    this.cache.set(key, JSON.stringify(metadata))
+  }
+
+  /**
+   * Retrieve install metadata for a package
+   */
+  static async getInstallMetadata(
+    packageHash: string
+  ): Promise<{ installMode: number; timestamp: number; minimumBackgroundDuration?: number } | null> {
+    const key = `${STORAGE_KEYS.INSTALL_METADATA_PREFIX}${packageHash}`
+    const data = this.cache.get(key)
+    if (!data) {
+      return null
+    }
+    try {
+      return JSON.parse(data)
+    } catch {
+      return null
+    }
   }
 }

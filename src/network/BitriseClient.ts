@@ -1,5 +1,6 @@
 import { NetworkError } from '../types/errors'
 import type { RemotePackage } from '../types/package'
+import { RemotePackageImpl } from '../codepush/RemotePackageImpl'
 
 /**
  * Response from Bitrise CodePush check for update endpoint
@@ -84,8 +85,8 @@ export class BitriseClient {
         return null
       }
 
-      // Transform to RemotePackage format
-      const remotePackage: RemotePackage = {
+      // Create RemotePackage instance
+      return new RemotePackageImpl({
         appVersion: updateInfo.appVersion,
         deploymentKey: this.deploymentKey,
         description: updateInfo.description || '',
@@ -97,12 +98,7 @@ export class BitriseClient {
         packageHash: updateInfo.packageHash,
         packageSize: updateInfo.packageSize,
         downloadUrl: updateInfo.downloadUrl,
-        download: async () => {
-          throw new Error('Download method should be implemented by RemotePackage class')
-        },
-      }
-
-      return remotePackage
+      })
     } catch (error) {
       if (error instanceof NetworkError) {
         throw error

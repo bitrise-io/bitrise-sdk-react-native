@@ -187,18 +187,39 @@ export class CodePush {
   }
 
   /**
-   * Restart the app
+   * Restart the app to apply a pending update
    *
-   * @param onlyIfUpdateIsPending - Only restart if an update is pending
+   * @param onlyIfUpdateIsPending - Only restart if an update is pending (default: false)
    *
    * @example
    * ```typescript
+   * // Restart immediately
    * codePush.restartApp()
+   *
+   * // Only restart if update is pending
+   * codePush.restartApp(true)
    * ```
    */
-  restartApp(onlyIfUpdateIsPending?: boolean): void {
-    // TODO: Implement in Phase 3
-    throw new Error('restartApp not yet implemented')
+  async restartApp(onlyIfUpdateIsPending?: boolean): Promise<void> {
+    // Check if pending update exists (if requested)
+    if (onlyIfUpdateIsPending) {
+      const pendingPackage = await PackageStorage.getPendingPackage()
+      if (!pendingPackage) {
+        // No pending update, don't restart
+        return
+      }
+    }
+
+    // TODO: Implement native restart bridge
+    // For MVP, log warning that restart is required manually
+    // Future enhancement: Add native module for platform-specific restart
+    // iOS: Use RCTReloadCommand or RCTBridge reload
+    // Android: Use ReactInstanceManager recreateReactContextInBackground
+    console.warn(
+      '[CodePush] Restart required to apply update. ' +
+        'Native restart not yet implemented. ' +
+        'Please restart the app manually or use developer menu reload.'
+    )
   }
 
   /**

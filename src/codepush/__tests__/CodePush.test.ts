@@ -26,6 +26,11 @@ describe('CodePush', () => {
   beforeEach(() => {
     codePush = new CodePush(mockConfig)
     jest.clearAllMocks()
+    jest.spyOn(console, 'warn').mockImplementation()
+  })
+
+  afterEach(() => {
+    jest.restoreAllMocks()
   })
 
   describe('getConfiguration', () => {
@@ -230,11 +235,41 @@ describe('CodePush', () => {
     })
   })
 
-  describe('unimplemented methods', () => {
-    it('restartApp should throw', () => {
-      expect(() => codePush.restartApp()).toThrow('not yet implemented')
+  describe('restartApp', () => {
+    it('should log warning about native restart not implemented', async () => {
+      ;(PackageStorage.getPendingPackage as jest.Mock).mockResolvedValue({
+        packageHash: 'test123',
+      })
+
+      await codePush.restartApp()
+
+      expect(console.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Restart required to apply update')
+      )
     })
 
+    it('should not restart if onlyIfUpdateIsPending is true and no pending update', async () => {
+      ;(PackageStorage.getPendingPackage as jest.Mock).mockResolvedValue(null)
+
+      await codePush.restartApp(true)
+
+      expect(console.warn).not.toHaveBeenCalled()
+    })
+
+    it('should restart if onlyIfUpdateIsPending is true and update is pending', async () => {
+      ;(PackageStorage.getPendingPackage as jest.Mock).mockResolvedValue({
+        packageHash: 'test123',
+      })
+
+      await codePush.restartApp(true)
+
+      expect(console.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Restart required to apply update')
+      )
+    })
+  })
+
+  describe('unimplemented methods', () => {
     it('allowRestart should throw', () => {
       expect(() => codePush.allowRestart()).toThrow('not yet implemented')
     })
