@@ -214,15 +214,24 @@ export class RollbackManager {
     } else {
       // Restart timer for remaining time
       const remainingMs = timeoutMs - elapsed
-      console.log(
-        `[CodePush] Restarting rollback timer with ${Math.floor(remainingMs / 60000)} minutes remaining`
-      )
-
-      this.currentPackageHash = pendingPackage.packageHash
-      this.rollbackTimer = setTimeout(() => {
-        this.performRollback(pendingPackage.packageHash)
-      }, remainingMs)
+      this.restartTimer(pendingPackage.packageHash, remainingMs)
     }
+  }
+
+  /**
+   * Restart the rollback timer with a specific delay
+   *
+   * @param packageHash - Hash of the package to monitor
+   * @param delayMs - Delay in milliseconds before rollback
+   */
+  private restartTimer(packageHash: string, delayMs: number): void {
+    const minutes = Math.floor(delayMs / 60000)
+    console.log(`[CodePush] Restarting rollback timer with ${minutes} minutes remaining`)
+
+    this.currentPackageHash = packageHash
+    this.rollbackTimer = setTimeout(() => {
+      this.performRollback(packageHash)
+    }, delayMs)
   }
 
   /**

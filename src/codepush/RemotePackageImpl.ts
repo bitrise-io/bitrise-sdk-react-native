@@ -163,72 +163,8 @@ export class RemotePackageImpl implements RemotePackage {
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
-        const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), timeout)
-
-        try {
-          const response = await fetch(url, {
-            signal: controller.signal,
-          })
-
-          clearTimeout(timeoutId)
-
-          if (!response.ok) {
-            throw new NetworkError(`HTTP ${response.status}: ${response.statusText}`, {
-              status: response.status,
-              url,
-            })
-          }
-
-          // Get total size from Content-Length header
-          const contentLength = response.headers.get('Content-Length')
-          const totalBytes = contentLength ? parseInt(contentLength, 10) : this.packageSize
-
-          // Read response as stream and track progress
-          const reader = response.body?.getReader()
-          if (!reader) {
-            throw new NetworkError('Response body is not readable', { url })
-          }
-
-          const chunks: Uint8Array[] = []
-          let receivedBytes = 0
-
-          while (true) {
-            const { done, value } = await reader.read()
-
-            if (done) {
-              break
-            }
-
-            if (value) {
-              chunks.push(value)
-              receivedBytes += value.length
-
-              // Invoke progress callback
-              if (progressCallback) {
-                try {
-                  progressCallback({ receivedBytes, totalBytes })
-                } catch (error) {
-                  // Don't let callback errors interrupt download
-                  console.warn('[CodePush] Progress callback error:', getErrorMessage(error))
-                }
-              }
-            }
-          }
-
-          // Combine chunks into single Uint8Array
-          const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0)
-          const result = new Uint8Array(totalLength)
-          let position = 0
-          for (const chunk of chunks) {
-            result.set(chunk, position)
-            position += chunk.length
-          }
-
-          return result
-        } finally {
-          clearTimeout(timeoutId)
-        }
+        const result = await this.attemptDownload(url, timeout, progressCallback)
+        return result
       } catch (error) {
         const isLastAttempt = attempt === maxRetries - 1
 
@@ -250,6 +186,108 @@ export class RemotePackageImpl implements RemotePackage {
 
     // Should never reach here, but TypeScript needs it
     throw new NetworkError('Download failed', { url })
+  }
+
+  /**
+   * Attempt a single download with timeout
+   */
+  private async attemptDownload(
+    url: string,
+    timeout: number,
+    progressCallback?: (progress: DownloadProgress) => void
+  ): Promise<Uint8Array> {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), timeout)
+
+    try {
+      const response = await fetch(url, { signal: controller.signal })
+
+      if (!response.ok) {
+        throw new NetworkError(`HTTP ${response.status}: ${response.statusText}`, {
+          status: response.status,
+          url,
+        })
+      }
+
+      // Get total size from Content-Length header
+      const contentLength = response.headers.get('Content-Length')
+      const totalBytes = contentLength ? parseInt(contentLength, 10) : this.packageSize
+
+      // Read response stream
+      const reader = response.body?.getReader()
+      if (!reader) {
+        throw new NetworkError('Response body is not readable', { url })
+      }
+
+      const chunks = await this.readStreamChunks(reader, totalBytes, progressCallback)
+      return this.concatenateChunks(chunks)
+    } finally {
+      clearTimeout(timeoutId)
+    }
+  }
+
+  /**
+   * Read all chunks from a stream with progress tracking
+   */
+  private async readStreamChunks(
+    reader: ReadableStreamDefaultReader<Uint8Array>,
+    totalBytes: number,
+    progressCallback?: (progress: DownloadProgress) => void
+  ): Promise<Uint8Array[]> {
+    const chunks: Uint8Array[] = []
+    let receivedBytes = 0
+
+    while (true) {
+      const { done, value } = await reader.read()
+
+      if (done) {
+        break
+      }
+
+      if (value) {
+        chunks.push(value)
+        receivedBytes += value.length
+        this.reportProgress(receivedBytes, totalBytes, progressCallback)
+      }
+    }
+
+    return chunks
+  }
+
+  /**
+   * Safely invoke progress callback without interrupting download
+   */
+  private reportProgress(
+    receivedBytes: number,
+    totalBytes: number,
+    progressCallback?: (progress: DownloadProgress) => void
+  ): void {
+    if (!progressCallback) {
+      return
+    }
+
+    try {
+      progressCallback({ receivedBytes, totalBytes })
+    } catch (error) {
+      // Don't let callback errors interrupt download
+      console.warn('[CodePush] Progress callback error:', getErrorMessage(error))
+    }
+  }
+
+  /**
+   * Combine multiple Uint8Array chunks into a single array
+   */
+  private concatenateChunks(chunks: Uint8Array[]): Uint8Array {
+    const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0)
+    const result = new Uint8Array(totalLength)
+    let position = 0
+
+    for (const chunk of chunks) {
+      result.set(chunk, position)
+      position += chunk.length
+    }
+
+    return result
   }
 
   /**
