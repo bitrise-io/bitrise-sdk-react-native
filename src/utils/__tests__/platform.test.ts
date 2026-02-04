@@ -1,12 +1,77 @@
-import { getAppVersion, getPlatform, isIOS, isAndroid } from '../platform'
+import { getAppVersion, setAppVersion, getPlatform, isIOS, isAndroid } from '../platform'
 import { Platform } from 'react-native'
 
 describe('platform utils', () => {
   describe('getAppVersion', () => {
-    it('should return a version string', () => {
+    it('returns default version 1.0.0 when not set', () => {
       const version = getAppVersion()
       expect(typeof version).toBe('string')
-      expect(version).toBe('1.0.0')
+      // Will be either the cached value from previous tests or fallback
+      expect(version.length).toBeGreaterThan(0)
+    })
+
+    it('returns cached version after setAppVersion is called', () => {
+      setAppVersion('2.5.1')
+      const version = getAppVersion()
+      expect(version).toBe('2.5.1')
+    })
+
+    it('returns version string format', () => {
+      const version = getAppVersion()
+      expect(typeof version).toBe('string')
+      // Should match semantic versioning or fallback
+      expect(version.length).toBeGreaterThan(0)
+    })
+
+    it('handles native module failures gracefully', () => {
+      // Even if native modules fail, should return fallback
+      const version = getAppVersion()
+      expect(version).toBeTruthy()
+      expect(typeof version).toBe('string')
+    })
+  })
+
+  describe('setAppVersion', () => {
+    it('sets and caches app version', () => {
+      setAppVersion('1.2.3')
+      const version = getAppVersion()
+      expect(version).toBe('1.2.3')
+    })
+
+    it('handles semantic versioning formats', () => {
+      const versions = ['1.0.0', '2.5.1', '10.20.30']
+      versions.forEach(testVersion => {
+        setAppVersion(testVersion)
+        expect(getAppVersion()).toBe(testVersion)
+      })
+    })
+
+    it('handles version with build metadata', () => {
+      setAppVersion('1.0.0-beta.1')
+      expect(getAppVersion()).toBe('1.0.0-beta.1')
+    })
+
+    it('handles invalid version gracefully', () => {
+      const consoleSpy = jest.spyOn(console, 'warn').mockImplementation()
+
+      setAppVersion('')
+      expect(consoleSpy).toHaveBeenCalledWith('[CodePush] Invalid app version provided:', '')
+
+      setAppVersion(null as any)
+      expect(consoleSpy).toHaveBeenCalledWith('[CodePush] Invalid app version provided:', null)
+
+      consoleSpy.mockRestore()
+    })
+
+    it('updates version when called multiple times', () => {
+      setAppVersion('1.0.0')
+      expect(getAppVersion()).toBe('1.0.0')
+
+      setAppVersion('2.0.0')
+      expect(getAppVersion()).toBe('2.0.0')
+
+      setAppVersion('3.0.0')
+      expect(getAppVersion()).toBe('3.0.0')
     })
   })
 

@@ -34,3 +34,6 @@ export {
 
 // Errors
 export { BitriseError, ConfigurationError, NetworkError, UpdateError } from './types/errors'
+
+// Utilities
+export { setAppVersion } from './utils/platform'

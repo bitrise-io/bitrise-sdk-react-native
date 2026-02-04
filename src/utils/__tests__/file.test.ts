@@ -29,9 +29,17 @@ describe('file utilities', () => {
   })
 
   describe('getCodePushDirectory', () => {
-    it('should return placeholder directory path', () => {
+    it('should return platform-specific directory path', () => {
       const dir = getCodePushDirectory()
-      expect(dir).toBe('/codepush')
+      // Platform.OS defaults to 'ios' in Jest environment
+      expect(dir).toMatch(/CodePush/)
+      expect(typeof dir).toBe('string')
+    })
+
+    it('should return iOS path when on iOS', () => {
+      // Platform.OS is 'ios' in test environment
+      const dir = getCodePushDirectory()
+      expect(dir).toBe('/Documents/CodePush')
     })
   })
 
@@ -90,17 +98,38 @@ describe('file utilities', () => {
       const localPath = await savePackage(packageHash, data)
 
       expect(PackageStorage.setPackageData).toHaveBeenCalledWith(packageHash, expect.any(String))
-      expect(localPath).toBe('/codepush/abc123/index.bundle')
+      // Platform-specific path (iOS in test env)
+      expect(localPath).toBe('/Documents/CodePush/abc123/index.bundle')
     })
 
-    it('should warn for large packages (>5 MB)', async () => {
+    it('should not warn for packages under 10 MB', async () => {
+      const packageHash = 'medium123'
+      const mediumData = new Uint8Array(6 * 1024 * 1024) // 6 MB
+
+      await savePackage(packageHash, mediumData)
+
+      // Should not warn for 6 MB (under 10 MB threshold)
+      expect(console.warn).not.toHaveBeenCalled()
+    })
+
+    it('should warn for large packages (>10 MB)', async () => {
       const packageHash = 'large123'
-      const largeData = new Uint8Array(6 * 1024 * 1024) // 6 MB
+      const largeData = new Uint8Array(15 * 1024 * 1024) // 15 MB
 
       await savePackage(packageHash, largeData)
 
       expect(console.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Package size (6.00 MB) exceeds recommended limit')
+        expect.stringContaining('Package size (15.00 MB) exceeds recommended limit')
+      )
+    })
+
+    it('should reject very large packages (>50 MB)', async () => {
+      const packageHash = 'huge123'
+      const hugeData = new Uint8Array(60 * 1024 * 1024) // 60 MB
+
+      await expect(savePackage(packageHash, hugeData)).rejects.toThrow(UpdateError)
+      await expect(savePackage(packageHash, hugeData)).rejects.toThrow(
+        'exceeds maximum supported size'
       )
     })
 
@@ -117,7 +146,7 @@ describe('file utilities', () => {
 
   describe('loadPackage', () => {
     it('should load package data from storage', async () => {
-      const localPath = '/codepush/abc123/index.bundle'
+      const localPath = '/Documents/CodePush/abc123/index.bundle'
       const base64Data = 'SGVsbG8=' // "Hello" in base64
 
       ;(PackageStorage.getPackageData as jest.Mock).mockResolvedValue(base64Data)
@@ -130,7 +159,7 @@ describe('file utilities', () => {
     })
 
     it('should return null if package not found', async () => {
-      const localPath = '/codepush/notfound/index.bundle'
+      const localPath = '/Documents/CodePush/notfound/index.bundle'
 
       ;(PackageStorage.getPackageData as jest.Mock).mockResolvedValue(null)
 
@@ -149,7 +178,7 @@ describe('file utilities', () => {
     })
 
     it('should return null and log error if load fails', async () => {
-      const localPath = '/codepush/error123/index.bundle'
+      const localPath = '/Documents/CodePush/error123/index.bundle'
 
       ;(PackageStorage.getPackageData as jest.Mock).mockRejectedValue(new Error('Load error'))
 
@@ -158,11 +187,23 @@ describe('file utilities', () => {
       expect(data).toBeNull()
       expect(console.error).toHaveBeenCalledWith('[CodePush] Failed to load package:', 'Load error')
     })
+
+    it('should work with legacy paths', async () => {
+      const legacyPath = '/codepush/abc123/index.bundle'
+      const base64Data = 'SGVsbG8='
+
+      ;(PackageStorage.getPackageData as jest.Mock).mockResolvedValue(base64Data)
+
+      const data = await loadPackage(legacyPath)
+
+      expect(data).not.toBeNull()
+      expect(PackageStorage.getPackageData).toHaveBeenCalledWith('abc123')
+    })
   })
 
   describe('deletePackage', () => {
     it('should delete package from storage', async () => {
-      const localPath = '/codepush/abc123/index.bundle'
+      const localPath = '/Documents/CodePush/abc123/index.bundle'
 
       await deletePackage(localPath)
 
@@ -170,7 +211,7 @@ describe('file utilities', () => {
     })
 
     it('should not throw if package not found', async () => {
-      const localPath = '/codepush/notfound/index.bundle'
+      const localPath = '/Documents/CodePush/notfound/index.bundle'
 
       ;(PackageStorage.deletePackageData as jest.Mock).mockRejectedValue(new Error('Not found'))
 
@@ -190,6 +231,14 @@ describe('file utilities', () => {
       await expect(deletePackage(invalidPath)).resolves.toBeUndefined()
 
       expect(PackageStorage.deletePackageData).not.toHaveBeenCalled()
+    })
+
+    it('should work with legacy paths', async () => {
+      const legacyPath = '/codepush/abc123/index.bundle'
+
+      await deletePackage(legacyPath)
+
+      expect(PackageStorage.deletePackageData).toHaveBeenCalledWith('abc123')
     })
   })
 })
