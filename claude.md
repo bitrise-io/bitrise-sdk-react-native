@@ -218,6 +218,9 @@ src/
 - Maintain backward compatibility
 - Never crash host app
 - Let linters handle formatting
+- Keep files < 500 lines
+- Keep functions < 50 lines
+- Maintain clear module boundaries
 
 **Never:**
 - Create extra .md files
@@ -225,3 +228,6 @@ src/
 - Skip tests
 - Break APIs without major version bump
 - Log sensitive data
+- Create files over 500 lines
+- Create functions over 50 lines
+- Mix unrelated concerns in one module
