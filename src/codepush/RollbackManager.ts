@@ -1,5 +1,4 @@
 import { PackageStorage } from '../storage/PackageStorage'
-import type { Package } from '../types/package'
 import type { RollbackRetryOptions } from '../types/package'
 import { MetricsClient, MetricEvent } from '../metrics/MetricsClient'
 
@@ -102,7 +101,9 @@ export class RollbackManager {
       this.performRollback(installedPackageHash)
     }, timeoutMs)
 
-    console.log(`[CodePush] Rollback timer started: ${timeoutMinutes} minutes for ${installedPackageHash}`)
+    console.log(
+      `[CodePush] Rollback timer started: ${timeoutMinutes} minutes for ${installedPackageHash}`
+    )
   }
 
   /**

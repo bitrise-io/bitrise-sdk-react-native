@@ -16,6 +16,7 @@ import { RestartQueue } from './RestartQueue'
 import { restartApp as nativeRestart } from '../native/Restart'
 import { RollbackManager } from './RollbackManager'
 import { MetricsClient, MetricEvent } from '../metrics/MetricsClient'
+import { getErrorMessage } from '../utils/error'
 
 /**
  * CodePush functionality for over-the-air updates
@@ -498,7 +499,7 @@ export class CodePush {
     } catch (error) {
       console.error('[CodePush] Failed to clear updates:', error)
       throw new UpdateError('Failed to clear updates', {
-        originalError: error instanceof Error ? error.message : String(error),
+        originalError: getErrorMessage(error),
       })
     }
   }

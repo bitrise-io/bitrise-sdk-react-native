@@ -6,6 +6,7 @@ import { RestartQueue } from './RestartQueue'
 import { restartApp } from '../native/Restart'
 import { RollbackManager } from './RollbackManager'
 import { MetricsClient, MetricEvent } from '../metrics/MetricsClient'
+import { getErrorMessage } from '../utils/error'
 
 /**
  * Implementation of LocalPackage interface
@@ -146,7 +147,7 @@ export class LocalPackageImpl implements LocalPackage {
         packageHash: this.packageHash,
         label: this.label,
         metadata: {
-          error: error instanceof Error ? error.message : String(error),
+          error: getErrorMessage(error),
         },
       })
       if (error instanceof UpdateError) {
@@ -154,7 +155,7 @@ export class LocalPackageImpl implements LocalPackage {
       }
       throw new UpdateError('Failed to install package', {
         packageHash: this.packageHash,
-        error: error instanceof Error ? error.message : String(error),
+        error: getErrorMessage(error),
       })
     }
   }
@@ -172,7 +173,7 @@ export class LocalPackageImpl implements LocalPackage {
     } catch (error) {
       throw new UpdateError('Failed to mark package as pending', {
         packageHash: this.packageHash,
-        error: error instanceof Error ? error.message : String(error),
+        error: getErrorMessage(error),
       })
     }
   }

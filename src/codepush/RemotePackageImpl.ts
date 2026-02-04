@@ -3,6 +3,7 @@ import { NetworkError, UpdateError } from '../types/errors'
 import { calculateHash, savePackage, deletePackage } from '../utils/file'
 import { LocalPackageImpl } from './LocalPackageImpl'
 import { MetricsClient, MetricEvent } from '../metrics/MetricsClient'
+import { getErrorMessage } from '../utils/error'
 
 /**
  * Implementation of RemotePackage interface
@@ -126,7 +127,7 @@ export class RemotePackageImpl implements RemotePackage {
         packageHash: this.packageHash,
         label: this.label,
         metadata: {
-          error: error instanceof Error ? error.message : String(error),
+          error: getErrorMessage(error),
         },
       })
       // Clean up on error (attempt to delete partial data)
@@ -143,7 +144,7 @@ export class RemotePackageImpl implements RemotePackage {
       }
       throw new UpdateError('Failed to download package', {
         packageHash: this.packageHash,
-        error: error instanceof Error ? error.message : String(error),
+        error: getErrorMessage(error),
       })
     } finally {
       RemotePackageImpl.downloadInProgress = false
@@ -209,10 +210,7 @@ export class RemotePackageImpl implements RemotePackage {
                   progressCallback({ receivedBytes, totalBytes })
                 } catch (error) {
                   // Don't let callback errors interrupt download
-                  console.warn(
-                    '[CodePush] Progress callback error:',
-                    error instanceof Error ? error.message : String(error)
-                  )
+                  console.warn('[CodePush] Progress callback error:', getErrorMessage(error))
                 }
               }
             }
@@ -240,7 +238,7 @@ export class RemotePackageImpl implements RemotePackage {
           }
           throw new NetworkError(`Download failed after ${maxRetries} attempts`, {
             url,
-            error: error instanceof Error ? error.message : String(error),
+            error: getErrorMessage(error),
           })
         }
 

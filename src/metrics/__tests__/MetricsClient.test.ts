@@ -201,9 +201,7 @@ describe('MetricsClient', () => {
 
       // Event should be requeued
       expect(client.getQueueSize()).toBe(1)
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Metrics report failed')
-      )
+      expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Metrics report failed'))
 
       consoleWarnSpy.mockRestore()
     })
@@ -272,7 +270,7 @@ describe('MetricsClient', () => {
 
       // Make fetch slow
       ;(global.fetch as jest.Mock).mockImplementation(
-        () => new Promise((resolve) => setTimeout(() => resolve({ ok: true }), 100))
+        () => new Promise(resolve => setTimeout(() => resolve({ ok: true }), 100))
       )
 
       client.reportEvent(MetricEvent.UPDATE_CHECK)

@@ -24,7 +24,11 @@ describe('codePush decorator', () => {
     it('should wrap component correctly', () => {
       class TestComponent extends Component {
         render() {
-          return <View><Text>Test</Text></View>
+          return (
+            <View>
+              <Text>Test</Text>
+            </View>
+          )
         }
       }
 
@@ -37,7 +41,11 @@ describe('codePush decorator', () => {
     it('should return a class component', () => {
       class TestComponent extends Component {
         render() {
-          return <View><Text>Test</Text></View>
+          return (
+            <View>
+              <Text>Test</Text>
+            </View>
+          )
         }
       }
 
@@ -63,7 +71,7 @@ describe('codePush decorator', () => {
       const instance = new WrappedComponent({})
       await instance.componentDidMount?.()
 
-      await new Promise((resolve) => setImmediate(resolve))
+      await new Promise(resolve => setImmediate(resolve))
 
       expect(mockSync).toHaveBeenCalledTimes(1)
     })
@@ -84,7 +92,7 @@ describe('codePush decorator', () => {
       const instance = new WrappedComponent({})
       await instance.componentDidMount?.()
 
-      await new Promise((resolve) => setImmediate(resolve))
+      await new Promise(resolve => setImmediate(resolve))
 
       expect(mockSync).toHaveBeenCalledTimes(1)
     })
@@ -145,7 +153,7 @@ describe('codePush decorator', () => {
       const instance = new WrappedComponent({})
       await instance.componentDidMount?.()
 
-      await new Promise((resolve) => setImmediate(resolve))
+      await new Promise(resolve => setImmediate(resolve))
 
       expect(mockSync).not.toHaveBeenCalled()
     })
@@ -168,7 +176,7 @@ describe('codePush decorator', () => {
       const instance = new WrappedComponent({})
       await instance.componentDidMount?.()
 
-      await new Promise((resolve) => setImmediate(resolve))
+      await new Promise(resolve => setImmediate(resolve))
 
       expect(mockSync).toHaveBeenCalledWith({
         installMode: 1,
@@ -196,7 +204,7 @@ describe('codePush decorator', () => {
       const instance = new WrappedComponent({})
       await instance.componentDidMount?.()
 
-      await new Promise((resolve) => setImmediate(resolve))
+      await new Promise(resolve => setImmediate(resolve))
 
       expect(onSyncStatusChanged).toHaveBeenCalledWith(SyncStatus.UPDATE_INSTALLED)
     })
@@ -222,7 +230,7 @@ describe('codePush decorator', () => {
       const instance = new WrappedComponent({})
       await instance.componentDidMount?.()
 
-      await new Promise((resolve) => setImmediate(resolve))
+      await new Promise(resolve => setImmediate(resolve))
 
       expect(onSyncError).toHaveBeenCalledWith(error)
       expect(consoleErrorSpy).toHaveBeenCalled()
@@ -244,7 +252,7 @@ describe('codePush decorator', () => {
       const instance = new WrappedComponent({})
       await instance.componentDidMount?.()
 
-      await new Promise((resolve) => setImmediate(resolve))
+      await new Promise(resolve => setImmediate(resolve))
 
       expect(mockSync).toHaveBeenCalledTimes(1)
     })

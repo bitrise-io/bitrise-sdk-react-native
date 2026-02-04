@@ -50,7 +50,7 @@ export class BitriseSDK {
     // This handles cases where the app was terminated while a rollback timer was active
     RollbackManager.getInstance()
       .checkPendingRollback()
-      .catch((error) => {
+      .catch(error => {
         console.error('[CodePush] Failed to check pending rollback:', error)
       })
   }

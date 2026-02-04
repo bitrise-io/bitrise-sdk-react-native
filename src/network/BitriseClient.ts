@@ -1,6 +1,7 @@
 import { NetworkError } from '../types/errors'
 import type { RemotePackage } from '../types/package'
 import { RemotePackageImpl } from '../codepush/RemotePackageImpl'
+import { getErrorMessage } from '../utils/error'
 
 /**
  * Response from Bitrise CodePush check for update endpoint
@@ -19,8 +20,6 @@ interface CheckUpdateResponse {
     updateAppVersion?: boolean
   }
 }
-
-const CLIENT_ID_KEY = '@bitrise/clientId'
 
 /**
  * HTTP client for Bitrise CodePush API
@@ -109,7 +108,7 @@ export class BitriseClient {
         throw error
       }
       throw new NetworkError('Failed to check for update', {
-        originalError: error instanceof Error ? error.message : String(error),
+        originalError: getErrorMessage(error),
       })
     }
   }
@@ -182,7 +181,7 @@ export class BitriseClient {
    * Simple implementation without external dependencies
    */
   private generateUUID(): string {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
       const r = (Math.random() * 16) | 0
       const v = c === 'x' ? r : (r & 0x3) | 0x8
       return v.toString(16)

@@ -1,4 +1,5 @@
 import type { Package, LocalPackage } from '../types/package'
+import { getStorageItem, setStorageItem, removeStorageItem, clearStorage } from '../utils/storage'
 
 /**
  * Storage keys for CodePush metadata
@@ -24,66 +25,42 @@ export class PackageStorage {
    * Get the currently running package
    */
   static async getCurrentPackage(): Promise<Package | null> {
-    const data = this.cache.get(STORAGE_KEYS.CURRENT_PACKAGE)
-    if (!data) {
-      return null
-    }
-    try {
-      return JSON.parse(data)
-    } catch {
-      return null
-    }
+    return getStorageItem<Package>(this.cache, STORAGE_KEYS.CURRENT_PACKAGE, null)
   }
 
   /**
    * Set the currently running package
    */
   static async setCurrentPackage(pkg: Package): Promise<void> {
-    this.cache.set(STORAGE_KEYS.CURRENT_PACKAGE, JSON.stringify(pkg))
+    setStorageItem(this.cache, STORAGE_KEYS.CURRENT_PACKAGE, pkg)
   }
 
   /**
    * Get the pending package (installed but not yet running)
    */
   static async getPendingPackage(): Promise<LocalPackage | null> {
-    const data = this.cache.get(STORAGE_KEYS.PENDING_PACKAGE)
-    if (!data) {
-      return null
-    }
-    try {
-      return JSON.parse(data)
-    } catch {
-      return null
-    }
+    return getStorageItem<LocalPackage>(this.cache, STORAGE_KEYS.PENDING_PACKAGE, null)
   }
 
   /**
    * Set the pending package
    */
   static async setPendingPackage(pkg: LocalPackage): Promise<void> {
-    this.cache.set(STORAGE_KEYS.PENDING_PACKAGE, JSON.stringify(pkg))
+    setStorageItem(this.cache, STORAGE_KEYS.PENDING_PACKAGE, pkg)
   }
 
   /**
    * Clear the pending package
    */
   static async clearPendingPackage(): Promise<void> {
-    this.cache.delete(STORAGE_KEYS.PENDING_PACKAGE)
+    removeStorageItem(this.cache, STORAGE_KEYS.PENDING_PACKAGE)
   }
 
   /**
    * Get the list of failed update hashes
    */
   static async getFailedUpdates(): Promise<string[]> {
-    const data = this.cache.get(STORAGE_KEYS.FAILED_UPDATES)
-    if (!data) {
-      return []
-    }
-    try {
-      return JSON.parse(data)
-    } catch {
-      return []
-    }
+    return getStorageItem<string[]>(this.cache, STORAGE_KEYS.FAILED_UPDATES, []) || []
   }
 
   /**
@@ -93,7 +70,7 @@ export class PackageStorage {
     const failed = await this.getFailedUpdates()
     if (!failed.includes(packageHash)) {
       failed.push(packageHash)
-      this.cache.set(STORAGE_KEYS.FAILED_UPDATES, JSON.stringify(failed))
+      setStorageItem(this.cache, STORAGE_KEYS.FAILED_UPDATES, failed)
     }
   }
 
@@ -103,9 +80,9 @@ export class PackageStorage {
    */
   static async setFailedUpdates(hashes: string[]): Promise<void> {
     if (hashes.length === 0) {
-      this.cache.delete(STORAGE_KEYS.FAILED_UPDATES)
+      removeStorageItem(this.cache, STORAGE_KEYS.FAILED_UPDATES)
     } else {
-      this.cache.set(STORAGE_KEYS.FAILED_UPDATES, JSON.stringify(hashes))
+      setStorageItem(this.cache, STORAGE_KEYS.FAILED_UPDATES, hashes)
     }
   }
 
@@ -113,14 +90,14 @@ export class PackageStorage {
    * Clear failed updates list
    */
   static async clearFailedUpdates(): Promise<void> {
-    this.cache.delete(STORAGE_KEYS.FAILED_UPDATES)
+    removeStorageItem(this.cache, STORAGE_KEYS.FAILED_UPDATES)
   }
 
   /**
    * Clear all storage
    */
   static async clear(): Promise<void> {
-    this.cache.clear()
+    clearStorage(this.cache)
   }
 
   /**
@@ -155,7 +132,7 @@ export class PackageStorage {
     metadata: { installMode: number; timestamp: number; minimumBackgroundDuration?: number }
   ): Promise<void> {
     const key = `${STORAGE_KEYS.INSTALL_METADATA_PREFIX}${packageHash}`
-    this.cache.set(key, JSON.stringify(metadata))
+    setStorageItem(this.cache, key, metadata)
   }
 
   /**
@@ -167,15 +144,7 @@ export class PackageStorage {
     minimumBackgroundDuration?: number
   } | null> {
     const key = `${STORAGE_KEYS.INSTALL_METADATA_PREFIX}${packageHash}`
-    const data = this.cache.get(key)
-    if (!data) {
-      return null
-    }
-    try {
-      return JSON.parse(data)
-    } catch {
-      return null
-    }
+    return getStorageItem(this.cache, key, null)
   }
 
   /**
@@ -192,7 +161,7 @@ export class PackageStorage {
     }
   ): Promise<void> {
     const key = `${STORAGE_KEYS.ROLLBACK_METADATA_PREFIX}${packageHash}`
-    this.cache.set(key, JSON.stringify(metadata))
+    setStorageItem(this.cache, key, metadata)
   }
 
   /**
@@ -206,15 +175,7 @@ export class PackageStorage {
     previousPackageHash: string
   } | null> {
     const key = `${STORAGE_KEYS.ROLLBACK_METADATA_PREFIX}${packageHash}`
-    const data = this.cache.get(key)
-    if (!data) {
-      return null
-    }
-    try {
-      return JSON.parse(data)
-    } catch {
-      return null
-    }
+    return getStorageItem(this.cache, key, null)
   }
 
   /**
@@ -223,13 +184,13 @@ export class PackageStorage {
   static async clearRollbackMetadata(packageHash?: string): Promise<void> {
     if (packageHash) {
       const key = `${STORAGE_KEYS.ROLLBACK_METADATA_PREFIX}${packageHash}`
-      this.cache.delete(key)
+      removeStorageItem(this.cache, key)
     } else {
       // Clear all rollback metadata
-      const keys = Array.from(this.cache.keys()).filter((key) =>
+      const keys = Array.from(this.cache.keys()).filter(key =>
         key.startsWith(STORAGE_KEYS.ROLLBACK_METADATA_PREFIX)
       )
-      keys.forEach((key) => this.cache.delete(key))
+      keys.forEach(key => removeStorageItem(this.cache, key))
     }
   }
 
@@ -239,26 +200,18 @@ export class PackageStorage {
   static async addToPackageHistory(pkg: Package): Promise<void> {
     const history = await this.getPackageHistory()
     // Add to front, remove if already exists
-    const filtered = history.filter((p) => p.packageHash !== pkg.packageHash)
+    const filtered = history.filter(p => p.packageHash !== pkg.packageHash)
     filtered.unshift(pkg)
     // Keep only last 3
     const trimmed = filtered.slice(0, 3)
-    this.cache.set(STORAGE_KEYS.PACKAGE_HISTORY, JSON.stringify(trimmed))
+    setStorageItem(this.cache, STORAGE_KEYS.PACKAGE_HISTORY, trimmed)
   }
 
   /**
    * Get package history (up to last 3 versions)
    */
   static async getPackageHistory(): Promise<Package[]> {
-    const data = this.cache.get(STORAGE_KEYS.PACKAGE_HISTORY)
-    if (!data) {
-      return []
-    }
-    try {
-      return JSON.parse(data)
-    } catch {
-      return []
-    }
+    return getStorageItem<Package[]>(this.cache, STORAGE_KEYS.PACKAGE_HISTORY, []) || []
   }
 
   /**
@@ -266,6 +219,6 @@ export class PackageStorage {
    */
   static async getPackageByHash(packageHash: string): Promise<Package | null> {
     const history = await this.getPackageHistory()
-    return history.find((p) => p.packageHash === packageHash) || null
+    return history.find(p => p.packageHash === packageHash) || null
   }
 }

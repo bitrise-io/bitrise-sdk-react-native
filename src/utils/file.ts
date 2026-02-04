@@ -1,5 +1,6 @@
 import { UpdateError } from '../types/errors'
 import { PackageStorage } from '../storage/PackageStorage'
+import { getErrorMessage } from './error'
 
 /**
  * Get platform-specific CodePush storage directory
@@ -38,10 +39,7 @@ export async function calculateHash(data: Uint8Array): Promise<string> {
     )
     return 'unverified'
   } catch (error) {
-    console.warn(
-      '[CodePush] Hash calculation failed:',
-      error instanceof Error ? error.message : String(error)
-    )
+    console.warn('[CodePush] Hash calculation failed:', getErrorMessage(error))
     return 'unverified'
   }
 }
@@ -80,7 +78,7 @@ export async function savePackage(packageHash: string, data: Uint8Array): Promis
   } catch (error) {
     throw new UpdateError('Failed to save package data', {
       packageHash,
-      error: error instanceof Error ? error.message : String(error),
+      error: getErrorMessage(error),
     })
   }
 }
@@ -109,10 +107,7 @@ export async function loadPackage(localPath: string): Promise<Uint8Array | null>
     // Convert from base64 to Uint8Array
     return base64ToUint8Array(base64Data)
   } catch (error) {
-    console.error(
-      '[CodePush] Failed to load package:',
-      error instanceof Error ? error.message : String(error)
-    )
+    console.error('[CodePush] Failed to load package:', getErrorMessage(error))
     return null
   }
 }
@@ -134,10 +129,7 @@ export async function deletePackage(localPath: string): Promise<void> {
     await PackageStorage.deletePackageData(packageHash)
   } catch (error) {
     // Don't throw - deletion failures should not crash the app
-    console.error(
-      '[CodePush] Failed to delete package:',
-      error instanceof Error ? error.message : String(error)
-    )
+    console.error('[CodePush] Failed to delete package:', getErrorMessage(error))
   }
 }
 
