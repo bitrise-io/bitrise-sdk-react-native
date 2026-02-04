@@ -14,6 +14,8 @@ import { PackageStorage } from '../storage/PackageStorage'
 import { getAppVersion } from '../utils/platform'
 import { RestartQueue } from './RestartQueue'
 import { restartApp as nativeRestart } from '../native/Restart'
+import { RollbackManager } from './RollbackManager'
+import { MetricsClient, MetricEvent } from '../metrics/MetricsClient'
 
 /**
  * CodePush functionality for over-the-air updates
@@ -73,7 +75,19 @@ export class CodePush {
     const currentHash = currentPackage?.packageHash
 
     // Check for update
-    return await client.checkForUpdate(currentHash)
+    const remotePackage = await client.checkForUpdate(currentHash)
+
+    // Report UPDATE_CHECK metric
+    MetricsClient.getInstance()?.reportEvent(MetricEvent.UPDATE_CHECK, {
+      packageHash: remotePackage?.packageHash,
+      label: remotePackage?.label,
+      metadata: {
+        isAvailable: !!remotePackage,
+        isMandatory: remotePackage?.isMandatory,
+      },
+    })
+
+    return remotePackage
   }
 
   /**
@@ -358,12 +372,18 @@ export class CodePush {
         await PackageStorage.setFailedUpdates(updated)
       }
 
-      // TODO Phase 6: Report success metrics to Bitrise server
-      // await this.reportMetrics({
-      //   event: 'update_success',
-      //   packageHash: currentPackage.packageHash,
-      //   label: currentPackage.label
-      // })
+      // Cancel rollback timer (app is ready)
+      const rollbackManager = RollbackManager.getInstance()
+      await rollbackManager.cancelTimer()
+
+      // Report APP_READY metric
+      MetricsClient.getInstance()?.reportEvent(MetricEvent.APP_READY, {
+        packageHash: currentPackage.packageHash,
+        label: currentPackage.label,
+        metadata: {
+          wasPending: !!pendingPackage,
+        },
+      })
     } catch (error) {
       // Never throw, just log
       console.error('[CodePush] performNotifyAppReady() error:', error)

@@ -5,6 +5,9 @@
 
 export { BitriseSDK } from './core/BitriseSDK'
 export { CodePush } from './codepush/CodePush'
+export { codePush } from './codepush/decorator'
+export type { CodePushOptions } from './codepush/decorator'
+export { MetricsClient, MetricEvent } from './metrics/MetricsClient'
 
 // Types
 export type { BitriseConfig } from './types/config'

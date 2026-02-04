@@ -1,6 +1,9 @@
 import type { BitriseConfig } from '../types/config'
 import { ConfigurationError } from '../types/errors'
 import { CodePush } from '../codepush/CodePush'
+import { RollbackManager } from '../codepush/RollbackManager'
+import { MetricsClient } from '../metrics/MetricsClient'
+import { getAppVersion } from '../utils/platform'
 
 /**
  * Main SDK class for Bitrise integration
@@ -32,6 +35,24 @@ export class BitriseSDK {
     }
     // Reset CodePush instance when config changes
     this._codePush = null
+
+    // Initialize MetricsClient if deployment key is provided
+    if (config.deploymentKey && config.serverUrl) {
+      // Get or generate client ID
+      // Note: This uses a session-based UUID. Apps can provide a persistent ID
+      // by calling BitriseClient.setClientId() after SDK initialization.
+      const appVersion = getAppVersion()
+      const clientId = `session-${Date.now()}-${Math.random().toString(36).substring(7)}`
+      MetricsClient.initialize(config.serverUrl, config.deploymentKey, clientId, appVersion)
+    }
+
+    // Check for pending rollback on app start
+    // This handles cases where the app was terminated while a rollback timer was active
+    RollbackManager.getInstance()
+      .checkPendingRollback()
+      .catch((error) => {
+        console.error('[CodePush] Failed to check pending rollback:', error)
+      })
   }
 
   /**

@@ -1,9 +1,11 @@
-import type { LocalPackage, Package } from '../types/package'
+import type { LocalPackage, Package, RollbackRetryOptions } from '../types/package'
 import { InstallMode } from '../types/enums'
 import { UpdateError } from '../types/errors'
 import { PackageStorage } from '../storage/PackageStorage'
 import { RestartQueue } from './RestartQueue'
 import { restartApp } from '../native/Restart'
+import { RollbackManager } from './RollbackManager'
+import { MetricsClient, MetricEvent } from '../metrics/MetricsClient'
 
 /**
  * Implementation of LocalPackage interface
@@ -42,6 +44,7 @@ export class LocalPackageImpl implements LocalPackage {
    *
    * @param installMode - When to apply the update (default: ON_NEXT_RESTART)
    * @param minimumBackgroundDuration - Minimum time in background before applying (for ON_NEXT_RESUME/SUSPEND)
+   * @param rollbackRetryOptions - Optional rollback configuration
    * @returns Promise resolving when install is queued
    *
    * @example
@@ -56,9 +59,28 @@ export class LocalPackageImpl implements LocalPackage {
    *
    * // Install when app resumes from background
    * await localPackage.install(InstallMode.ON_NEXT_RESUME, 60)
+   *
+   * // Install with custom rollback options
+   * await localPackage.install(InstallMode.ON_NEXT_RESTART, undefined, {
+   *   delayInHours: 0.5,
+   *   maxRetryAttempts: 3
+   * })
    * ```
    */
-  async install(installMode?: number, minimumBackgroundDuration?: number): Promise<void> {
+  async install(
+    installMode?: number,
+    minimumBackgroundDuration?: number,
+    rollbackRetryOptions?: RollbackRetryOptions
+  ): Promise<void> {
+    // Report INSTALL_START metric
+    MetricsClient.getInstance()?.reportEvent(MetricEvent.INSTALL_START, {
+      packageHash: this.packageHash,
+      label: this.label,
+      metadata: {
+        installMode: installMode ?? InstallMode.ON_NEXT_RESTART,
+      },
+    })
+
     try {
       // Default to ON_NEXT_RESTART if not specified
       const mode = installMode ?? InstallMode.ON_NEXT_RESTART
@@ -94,6 +116,23 @@ export class LocalPackageImpl implements LocalPackage {
         minimumBackgroundDuration,
       })
 
+      // Add to package history for rollback support
+      await PackageStorage.addToPackageHistory(this)
+
+      // Start rollback timer
+      // This will automatically rollback if notifyAppReady() is not called within timeout
+      const rollbackManager = RollbackManager.getInstance()
+      await rollbackManager.startRollbackTimer(this.packageHash, rollbackRetryOptions)
+
+      // Report INSTALL_COMPLETE metric
+      MetricsClient.getInstance()?.reportEvent(MetricEvent.INSTALL_COMPLETE, {
+        packageHash: this.packageHash,
+        label: this.label,
+        metadata: {
+          installMode: mode,
+        },
+      })
+
       // Handle IMMEDIATE mode - trigger restart (respects RestartQueue)
       if (mode === InstallMode.IMMEDIATE) {
         const restartQueue = RestartQueue.getInstance()
@@ -102,6 +141,14 @@ export class LocalPackageImpl implements LocalPackage {
         })
       }
     } catch (error) {
+      // Report INSTALL_FAILED metric
+      MetricsClient.getInstance()?.reportEvent(MetricEvent.INSTALL_FAILED, {
+        packageHash: this.packageHash,
+        label: this.label,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      })
       if (error instanceof UpdateError) {
         throw error
       }

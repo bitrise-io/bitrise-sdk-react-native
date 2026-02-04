@@ -2,6 +2,7 @@ import type { RemotePackage, LocalPackage, DownloadProgress, Package } from '../
 import { NetworkError, UpdateError } from '../types/errors'
 import { calculateHash, savePackage, deletePackage } from '../utils/file'
 import { LocalPackageImpl } from './LocalPackageImpl'
+import { MetricsClient, MetricEvent } from '../metrics/MetricsClient'
 
 /**
  * Implementation of RemotePackage interface
@@ -69,6 +70,15 @@ export class RemotePackageImpl implements RemotePackage {
 
     RemotePackageImpl.downloadInProgress = true
 
+    // Report DOWNLOAD_START metric
+    MetricsClient.getInstance()?.reportEvent(MetricEvent.DOWNLOAD_START, {
+      packageHash: this.packageHash,
+      label: this.label,
+      metadata: {
+        packageSize: this.packageSize,
+      },
+    })
+
     try {
       // Download package with progress tracking
       const data = await this.downloadWithProgress(this.downloadUrl, progressCallback)
@@ -100,8 +110,25 @@ export class RemotePackageImpl implements RemotePackage {
         localPath,
       })
 
+      // Report DOWNLOAD_COMPLETE metric
+      MetricsClient.getInstance()?.reportEvent(MetricEvent.DOWNLOAD_COMPLETE, {
+        packageHash: this.packageHash,
+        label: this.label,
+        metadata: {
+          packageSize: this.packageSize,
+        },
+      })
+
       return localPackage
     } catch (error) {
+      // Report DOWNLOAD_FAILED metric
+      MetricsClient.getInstance()?.reportEvent(MetricEvent.DOWNLOAD_FAILED, {
+        packageHash: this.packageHash,
+        label: this.label,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      })
       // Clean up on error (attempt to delete partial data)
       try {
         const localPath = `/codepush/${this.packageHash}/index.bundle`

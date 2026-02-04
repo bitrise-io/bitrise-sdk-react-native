@@ -20,6 +20,8 @@ interface CheckUpdateResponse {
   }
 }
 
+const CLIENT_ID_KEY = '@bitrise/clientId'
+
 /**
  * HTTP client for Bitrise CodePush API
  * Minimal wrapper around React Native's fetch API
@@ -28,6 +30,7 @@ export class BitriseClient {
   private readonly serverUrl: string
   private readonly deploymentKey: string
   private readonly appVersion: string
+  private clientId: string | null = null
 
   constructor(serverUrl: string, deploymentKey: string, appVersion: string) {
     this.serverUrl = serverUrl.replace(/\/$/, '') // Remove trailing slash
@@ -43,13 +46,15 @@ export class BitriseClient {
   async checkForUpdate(currentPackageHash?: string): Promise<RemotePackage | null> {
     const url = `${this.serverUrl}/release-management/v1/code-push/update_check`
 
+    const clientUniqueId = await this.getClientUniqueId()
+
     const requestBody = {
       appVersion: this.appVersion,
       deploymentKey: this.deploymentKey,
       packageHash: currentPackageHash,
       isCompanion: false,
       label: null,
-      clientUniqueId: this.getClientUniqueId(),
+      clientUniqueId,
     }
 
     try {
@@ -150,10 +155,56 @@ export class BitriseClient {
   /**
    * Get or generate a client unique ID
    * Used for analytics (no PII)
+   *
+   * The client ID is generated once per app session using a UUID.
+   * For persistent client IDs across app restarts, apps should use
+   * AsyncStorage or a similar storage mechanism and pass the ID
+   * via SDK configuration.
+   *
+   * Note: This generates a new ID per app session. For persistent
+   * analytics across sessions, consider storing the ID in your app's
+   * storage layer.
    */
-  private getClientUniqueId(): string {
-    // TODO: Generate and persist a unique client ID
-    // For now, return a placeholder
-    return 'client-' + Date.now()
+  private async getClientUniqueId(): Promise<string> {
+    // Return cached value if available
+    if (this.clientId) {
+      return this.clientId
+    }
+
+    // Generate new UUID for this session
+    // Apps can override this by implementing persistent storage
+    this.clientId = this.generateUUID()
+    return this.clientId
+  }
+
+  /**
+   * Generate a UUID v4
+   * Simple implementation without external dependencies
+   */
+  private generateUUID(): string {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = (Math.random() * 16) | 0
+      const v = c === 'x' ? r : (r & 0x3) | 0x8
+      return v.toString(16)
+    })
+  }
+
+  /**
+   * Set a custom client ID for analytics
+   * Use this to provide a persistent client ID from your app's storage
+   *
+   * @param clientId - Unique client identifier (no PII)
+   */
+  setClientId(clientId: string): void {
+    this.clientId = clientId
+  }
+
+  /**
+   * Get the current client ID
+   *
+   * @returns Current client ID or null if not yet generated
+   */
+  getClientId(): string | null {
+    return this.clientId
   }
 }

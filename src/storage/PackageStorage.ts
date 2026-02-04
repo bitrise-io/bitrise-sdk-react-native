@@ -9,6 +9,8 @@ const STORAGE_KEYS = {
   FAILED_UPDATES: '@bitrise/codepush/failedUpdates',
   PACKAGE_DATA_PREFIX: '@bitrise/codepush/packageData/',
   INSTALL_METADATA_PREFIX: '@bitrise/codepush/installMetadata/',
+  ROLLBACK_METADATA_PREFIX: '@bitrise/codepush/rollbackMetadata/',
+  PACKAGE_HISTORY: '@bitrise/codepush/packageHistory',
 } as const
 
 /**
@@ -174,5 +176,96 @@ export class PackageStorage {
     } catch {
       return null
     }
+  }
+
+  /**
+   * Store rollback metadata for a package
+   */
+  static async setRollbackMetadata(
+    packageHash: string,
+    metadata: {
+      installedAt: number
+      timeoutMinutes: number
+      maxRetries: number
+      retryCount: number
+      previousPackageHash: string
+    }
+  ): Promise<void> {
+    const key = `${STORAGE_KEYS.ROLLBACK_METADATA_PREFIX}${packageHash}`
+    this.cache.set(key, JSON.stringify(metadata))
+  }
+
+  /**
+   * Retrieve rollback metadata for a package
+   */
+  static async getRollbackMetadata(packageHash: string): Promise<{
+    installedAt: number
+    timeoutMinutes: number
+    maxRetries: number
+    retryCount: number
+    previousPackageHash: string
+  } | null> {
+    const key = `${STORAGE_KEYS.ROLLBACK_METADATA_PREFIX}${packageHash}`
+    const data = this.cache.get(key)
+    if (!data) {
+      return null
+    }
+    try {
+      return JSON.parse(data)
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * Clear rollback metadata for a package
+   */
+  static async clearRollbackMetadata(packageHash?: string): Promise<void> {
+    if (packageHash) {
+      const key = `${STORAGE_KEYS.ROLLBACK_METADATA_PREFIX}${packageHash}`
+      this.cache.delete(key)
+    } else {
+      // Clear all rollback metadata
+      const keys = Array.from(this.cache.keys()).filter((key) =>
+        key.startsWith(STORAGE_KEYS.ROLLBACK_METADATA_PREFIX)
+      )
+      keys.forEach((key) => this.cache.delete(key))
+    }
+  }
+
+  /**
+   * Store package history (up to last 3 versions)
+   */
+  static async addToPackageHistory(pkg: Package): Promise<void> {
+    const history = await this.getPackageHistory()
+    // Add to front, remove if already exists
+    const filtered = history.filter((p) => p.packageHash !== pkg.packageHash)
+    filtered.unshift(pkg)
+    // Keep only last 3
+    const trimmed = filtered.slice(0, 3)
+    this.cache.set(STORAGE_KEYS.PACKAGE_HISTORY, JSON.stringify(trimmed))
+  }
+
+  /**
+   * Get package history (up to last 3 versions)
+   */
+  static async getPackageHistory(): Promise<Package[]> {
+    const data = this.cache.get(STORAGE_KEYS.PACKAGE_HISTORY)
+    if (!data) {
+      return []
+    }
+    try {
+      return JSON.parse(data)
+    } catch {
+      return []
+    }
+  }
+
+  /**
+   * Get a specific package by hash from history
+   */
+  static async getPackageByHash(packageHash: string): Promise<Package | null> {
+    const history = await this.getPackageHistory()
+    return history.find((p) => p.packageHash === packageHash) || null
   }
 }

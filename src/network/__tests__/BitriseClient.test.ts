@@ -189,7 +189,7 @@ describe('BitriseClient', () => {
   })
 
   describe('constructor', () => {
-    it('should remove trailing slash from server URL', () => {
+    it('should remove trailing slash from server URL', async () => {
       const clientWithSlash = new BitriseClient(
         'https://api.bitrise.io/',
         mockDeploymentKey,
@@ -202,7 +202,7 @@ describe('BitriseClient', () => {
         json: async () => ({}),
       })
 
-      clientWithSlash.checkForUpdate()
+      await clientWithSlash.checkForUpdate()
 
       expect(global.fetch).toHaveBeenCalledWith(
         'https://api.bitrise.io/release-management/v1/code-push/update_check',
