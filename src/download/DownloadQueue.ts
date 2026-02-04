@@ -9,6 +9,8 @@ import type {
 } from '../types/package'
 import type { QueueConfig } from './QueueConfig'
 import { mergeQueueConfig } from './QueueConfig'
+import { QueueStatisticsTracker } from './QueueStatistics'
+import type { QueueStatistics } from './QueueStatistics'
 
 /**
  * DownloadQueue manages sequential downloads
@@ -30,6 +32,7 @@ export class DownloadQueue {
   private eventEmitter = new SimpleEventEmitter()
   private processing = false
   private config: Required<QueueConfig>
+  private statistics = new QueueStatisticsTracker()
 
   private constructor(config?: QueueConfig) {
     this.config = mergeQueueConfig(config)
@@ -87,6 +90,7 @@ export class DownloadQueue {
       }
 
       this.queue.push(item)
+      this.statistics.updateMaxQueueSize(this.queue.length)
       this.eventEmitter.emit(QueueEvent.ITEM_ADDED, {
         item,
         position: this.queue.length,
@@ -121,8 +125,16 @@ export class DownloadQueue {
 
       try {
         item.startedAt = Date.now()
+        const waitTime = item.startedAt - item.addedAt
 
         const localPackage = await this.downloadWithRetry(item)
+
+        const downloadTime = Date.now() - item.startedAt
+        this.statistics.recordSuccess(
+          waitTime,
+          downloadTime,
+          item.remotePackage.packageSize
+        )
 
         item.promise.resolve(localPackage)
         this.eventEmitter.emit(QueueEvent.DOWNLOAD_COMPLETED, {
@@ -130,6 +142,15 @@ export class DownloadQueue {
           package: localPackage,
         })
       } catch (error) {
+        const downloadTime = item.startedAt
+          ? Date.now() - item.startedAt
+          : 0
+        const waitTime = item.startedAt
+          ? item.startedAt - item.addedAt
+          : Date.now() - item.addedAt
+
+        this.statistics.recordFailure(waitTime, downloadTime)
+
         item.promise.reject(error as Error)
         this.eventEmitter.emit(QueueEvent.DOWNLOAD_FAILED, {
           item,
@@ -217,6 +238,9 @@ export class DownloadQueue {
       const items = this.queue.splice(index, 1)
       const item = items[0]
       if (item) {
+        const waitTime = Date.now() - item.addedAt
+        this.statistics.recordCancellation(waitTime)
+
         item.promise.reject(new Error('Download cancelled'))
         this.eventEmitter.emit(QueueEvent.ITEM_CANCELLED, { item })
       }
@@ -281,9 +305,26 @@ export class DownloadQueue {
   clear(): void {
     const items = this.queue.splice(0)
     items.forEach((item) => {
+      const waitTime = Date.now() - item.addedAt
+      this.statistics.recordCancellation(waitTime)
+
       item.promise.reject(new Error('Queue cleared'))
       this.eventEmitter.emit(QueueEvent.ITEM_CANCELLED, { item })
     })
+  }
+
+  /**
+   * Get queue statistics
+   */
+  getStatistics(): QueueStatistics {
+    return this.statistics.getStatistics(this.queue.length)
+  }
+
+  /**
+   * Reset queue statistics
+   */
+  resetStatistics(): void {
+    this.statistics.reset()
   }
 
   /**

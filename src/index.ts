@@ -11,6 +11,8 @@ export { MetricsClient, MetricEvent } from './metrics/MetricsClient'
 export { DownloadQueue } from './download/DownloadQueue'
 export type { QueueConfig } from './download/QueueConfig'
 export { QueueEvent } from './download/QueueEvents'
+export type { QueueStatistics } from './download/QueueStatistics'
+export { QueueError, QueueFullError, DownloadTimeoutError } from './download/QueueError'
 
 // Types
 export type { BitriseConfig } from './types/config'
