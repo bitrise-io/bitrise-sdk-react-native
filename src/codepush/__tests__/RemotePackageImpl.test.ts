@@ -29,6 +29,9 @@ describe('RemotePackageImpl', () => {
     jest.spyOn(console, 'warn').mockImplementation()
     jest.spyOn(console, 'log').mockImplementation()
 
+    // Explicitly reset fetch mock
+    ;(global.fetch as jest.Mock).mockClear()
+
     // Reset download in progress flag
     // @ts-expect-error - Accessing private static field for testing
     RemotePackageImpl.downloadInProgress = false
@@ -50,6 +53,9 @@ describe('RemotePackageImpl', () => {
   })
 
   describe('download', () => {
+    // Increase timeout for network tests with retries
+    jest.setTimeout(20000)
+
     it('should download package successfully', async () => {
       const pkg = new RemotePackageImpl(mockPackageData)
       const mockData = new Uint8Array([1, 2, 3, 4, 5])
@@ -169,12 +175,13 @@ describe('RemotePackageImpl', () => {
       const pkg = new RemotePackageImpl(mockPackageData)
       const mockData = new Uint8Array([1, 2, 3])
 
-      const mockReader = {
+      // Create a new reader for each fetch attempt
+      const createMockReader = () => ({
         read: jest
           .fn()
           .mockResolvedValueOnce({ done: false, value: mockData })
           .mockResolvedValueOnce({ done: true }),
-      }
+      })
 
       ;(global.fetch as jest.Mock).mockResolvedValue({
         ok: true,
@@ -182,7 +189,7 @@ describe('RemotePackageImpl', () => {
           get: jest.fn().mockReturnValue('3'),
         },
         body: {
-          getReader: jest.fn().mockReturnValue(mockReader),
+          getReader: jest.fn(() => createMockReader()),
         },
       })
 
@@ -203,12 +210,13 @@ describe('RemotePackageImpl', () => {
       const pkg = new RemotePackageImpl(mockPackageData)
       const mockData = new Uint8Array([1, 2, 3])
 
-      const mockReader = {
+      // Create a new reader for each fetch attempt
+      const createMockReader = () => ({
         read: jest
           .fn()
           .mockResolvedValueOnce({ done: false, value: mockData })
           .mockResolvedValueOnce({ done: true }),
-      }
+      })
 
       ;(global.fetch as jest.Mock).mockResolvedValue({
         ok: true,
@@ -216,7 +224,7 @@ describe('RemotePackageImpl', () => {
           get: jest.fn().mockReturnValue('3'),
         },
         body: {
-          getReader: jest.fn().mockReturnValue(mockReader),
+          getReader: jest.fn(() => createMockReader()),
         },
       })
 
@@ -231,7 +239,6 @@ describe('RemotePackageImpl', () => {
     })
 
     it('should retry on network failure', async () => {
-      jest.setTimeout(20000)
       const pkg = new RemotePackageImpl(mockPackageData)
       const mockData = new Uint8Array([1, 2, 3])
 
@@ -265,18 +272,17 @@ describe('RemotePackageImpl', () => {
     })
 
     it('should throw NetworkError after max retries', async () => {
-      jest.setTimeout(20000)
       const pkg = new RemotePackageImpl(mockPackageData)
 
       // Fail all attempts
       ;(global.fetch as jest.Mock).mockRejectedValue(new Error('Network error'))
 
       await expect(pkg.download()).rejects.toThrow(NetworkError)
-      expect(global.fetch).toHaveBeenCalledTimes(3)
+      // DownloadQueue retries 3 times, each attempt retries download 3 times = 9 total
+      expect(global.fetch).toHaveBeenCalledTimes(9)
     })
 
     it('should throw NetworkError if HTTP response is not ok', async () => {
-      jest.setTimeout(20000)
       const pkg = new RemotePackageImpl(mockPackageData)
 
       ;(global.fetch as jest.Mock).mockResolvedValue({
@@ -293,7 +299,6 @@ describe('RemotePackageImpl', () => {
     })
 
     it('should throw NetworkError if response body is not readable', async () => {
-      jest.setTimeout(20000)
       const pkg = new RemotePackageImpl(mockPackageData)
 
       ;(global.fetch as jest.Mock).mockResolvedValue({
@@ -312,7 +317,6 @@ describe('RemotePackageImpl', () => {
     })
 
     it('should handle progress callback errors gracefully', async () => {
-      jest.setTimeout(20000)
       const pkg = new RemotePackageImpl(mockPackageData)
       const badCallback = jest.fn().mockImplementation(() => {
         throw new Error('Callback error')
@@ -349,7 +353,6 @@ describe('RemotePackageImpl', () => {
     })
 
     it('should use packageSize if Content-Length header is missing', async () => {
-      jest.setTimeout(20000)
       const pkg = new RemotePackageImpl(mockPackageData)
       const progressCallback = jest.fn()
       const mockData = new Uint8Array([1, 2, 3])

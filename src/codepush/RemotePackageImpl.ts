@@ -169,6 +169,11 @@ export class RemotePackageImpl implements RemotePackage {
         const result = await this.attemptDownload(url, timeout, progressCallback)
         return result
       } catch (error) {
+        // Don't retry UpdateError (hash verification, etc.) - these are permanent failures
+        if (error instanceof UpdateError) {
+          throw error
+        }
+
         const isLastAttempt = attempt === maxRetries - 1
 
         if (isLastAttempt) {

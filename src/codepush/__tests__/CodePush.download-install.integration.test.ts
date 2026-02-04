@@ -65,6 +65,9 @@ describe('CodePush Download & Install Integration', () => {
   })
 
   describe('Full update flow: check → download → install → restart', () => {
+    // Increase timeout for download tests with retries
+    jest.setTimeout(20000)
+
     it('should complete full update flow successfully', async () => {
       const mockData = new Uint8Array([72, 101, 108, 108, 111]) // "Hello"
 
@@ -264,12 +267,13 @@ describe('CodePush Download & Install Integration', () => {
         checkForUpdate: mockCheckForUpdate,
       }))
 
-      const mockReader = {
+      // Create a new reader for each fetch attempt
+      const createMockReader = () => ({
         read: jest
           .fn()
           .mockResolvedValueOnce({ done: false, value: mockData })
           .mockResolvedValueOnce({ done: true }),
-      }
+      })
 
       ;(global.fetch as jest.Mock).mockResolvedValue({
         ok: true,
@@ -277,7 +281,7 @@ describe('CodePush Download & Install Integration', () => {
           get: jest.fn().mockReturnValue('3'),
         },
         body: {
-          getReader: jest.fn().mockReturnValue(mockReader),
+          getReader: jest.fn(() => createMockReader()),
         },
       })
 

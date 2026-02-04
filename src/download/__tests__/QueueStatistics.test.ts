@@ -100,6 +100,9 @@ describe('Queue Statistics', () => {
       const promise1 = queue.enqueue(mockRemotePackage)
       const promise2 = queue.enqueue(pkg2 as any)
 
+      // Attach rejection handler immediately to prevent unhandled promise rejection
+      const promise2Rejection = promise2.catch((e) => e)
+
       // Wait for first download to start
       while (!downloadStarted) {
         await new Promise((resolve) => setTimeout(resolve, 10))
@@ -113,7 +116,9 @@ describe('Queue Statistics', () => {
       }
 
       await promise1
-      await expect(promise2).rejects.toThrow('Download cancelled')
+      const error = await promise2Rejection
+      expect(error).toBeInstanceOf(Error)
+      expect(error.message).toContain('Download cancelled')
 
       const stats = queue.getStatistics()
 

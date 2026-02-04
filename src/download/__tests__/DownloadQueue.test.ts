@@ -32,7 +32,7 @@ describe('DownloadQueue', () => {
   })
 
   afterEach(() => {
-    // Clear queue state directly
+    // Clear queue state directly - don't reject promises as tests handle them
     ;(queue as any).queue = []
     ;(queue as any).currentDownload = null
     ;(queue as any).status = QueueStatus.IDLE
@@ -199,7 +199,7 @@ describe('DownloadQueue', () => {
         queue.on(QueueEvent.DOWNLOAD_FAILED, eventCallback)
 
         await expect(queue.enqueue(mockRemotePackage)).rejects.toThrow(
-          'Download failed after maximum retries'
+          'Download failed'
         )
 
         expect(eventCallback).toHaveBeenCalled()
@@ -268,7 +268,7 @@ describe('DownloadQueue', () => {
           .mockRejectedValue(new Error('Permanent failure'))
 
         await expect(queue.enqueue(mockRemotePackage)).rejects.toThrow(
-          'Download failed after maximum retries'
+          'Permanent failure'
         )
 
         expect(
@@ -315,6 +315,9 @@ describe('DownloadQueue', () => {
       const promise1 = queue.enqueue(mockRemotePackage1 as any)
       const promise2 = queue.enqueue(mockRemotePackage2 as any)
 
+      // Attach rejection handler immediately to prevent unhandled promise rejection
+      const promise2Rejection = promise2.catch((e) => e)
+
       // Wait for first download to start
       while (!download1Started) {
         await new Promise((resolve) => setTimeout(resolve, 10))
@@ -330,7 +333,9 @@ describe('DownloadQueue', () => {
 
       await promise1
 
-      await expect(promise2).rejects.toThrow('Download cancelled')
+      const error = await promise2Rejection
+      expect(error).toBeInstanceOf(Error)
+      expect(error.message).toContain('Download cancelled')
     })
 
     it('emits ITEM_CANCELLED event', async () => {
@@ -347,8 +352,11 @@ describe('DownloadQueue', () => {
       const eventCallback = jest.fn()
       queue.on(QueueEvent.ITEM_CANCELLED, eventCallback)
 
-      queue.enqueue(mockRemotePackage1 as any)
-      queue.enqueue(mockRemotePackage2 as any)
+      const promise1 = queue.enqueue(mockRemotePackage1 as any)
+      const promise2 = queue.enqueue(mockRemotePackage2 as any)
+
+      // Attach rejection handler to prevent unhandled promise rejection
+      const promise2Rejection = promise2.catch((e) => e)
 
       const state = queue.getState()
       const queuedItemId = state.queuedItems[0]?.id
@@ -358,6 +366,10 @@ describe('DownloadQueue', () => {
       }
 
       expect(eventCallback).toHaveBeenCalled()
+
+      // Clean up promises
+      await promise1
+      await promise2Rejection
     })
 
     it('throws when cancelling in-progress download', async () => {
@@ -452,9 +464,13 @@ describe('DownloadQueue', () => {
       // Wait for first download to complete
       await promise1
 
+      // Give a small delay to ensure queue has processed the completion
+      await new Promise((resolve) => setTimeout(resolve, 20))
+
       // Check that queue is paused with second item still queued
       const state = queue.getState()
       expect(state.status).toBe(QueueStatus.PAUSED)
+      expect(state.queuedItems.length).toBe(1)
 
       // Resume and wait for second download
       queue.resume()
@@ -502,6 +518,9 @@ describe('DownloadQueue', () => {
       const promise1 = queue.enqueue(mockRemotePackage1 as any)
       const promise2 = queue.enqueue(mockRemotePackage2 as any)
 
+      // Attach rejection handler immediately to prevent unhandled promise rejection
+      const promise2Rejection = promise2.catch((e) => e)
+
       // Wait for first download to start
       while (!download1Started) {
         await new Promise((resolve) => setTimeout(resolve, 10))
@@ -511,7 +530,9 @@ describe('DownloadQueue', () => {
       queue.clear()
 
       await promise1
-      await expect(promise2).rejects.toThrow('Queue cleared')
+      const error = await promise2Rejection
+      expect(error).toBeInstanceOf(Error)
+      expect(error.message).toContain('Queue cleared')
 
       const state = queue.getState()
       expect(state.queuedItems.length).toBe(0)

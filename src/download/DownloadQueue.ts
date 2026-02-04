@@ -161,9 +161,12 @@ export class DownloadQueue {
       }
     }
 
-    this.status = Status.IDLE
+    // Only set to IDLE if not paused
+    if (this.status !== Status.PAUSED) {
+      this.status = Status.IDLE
+      this.eventEmitter.emit(QueueEvent.STATUS_CHANGED, { status: this.status })
+    }
     this.processing = false
-    this.eventEmitter.emit(QueueEvent.STATUS_CHANGED, { status: this.status })
 
     if (this.queue.length === 0) {
       this.eventEmitter.emit(QueueEvent.QUEUE_EMPTIED)
