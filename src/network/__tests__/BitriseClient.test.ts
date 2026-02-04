@@ -104,7 +104,7 @@ describe('BitriseClient', () => {
         statusText: 'Internal Server Error',
       })
 
-      const error = await client.checkForUpdate().catch((e) => e)
+      const error = await client.checkForUpdate().catch(e => e)
       expect(error).toBeInstanceOf(NetworkError)
       expect(error.message).toContain('HTTP 500')
     })
@@ -179,7 +179,7 @@ describe('BitriseClient', () => {
       const promise = client.checkForUpdate()
       jest.runAllTimersAsync()
 
-      const error = await promise.catch((e) => e)
+      const error = await promise.catch(e => e)
       expect(error).toBeInstanceOf(NetworkError)
       expect(error.message).toContain('failed after 3 attempts')
       expect(global.fetch).toHaveBeenCalledTimes(3)

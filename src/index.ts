@@ -30,9 +30,4 @@ export {
 } from './types/codepush'
 
 // Errors
-export {
-  BitriseError,
-  ConfigurationError,
-  NetworkError,
-  UpdateError,
-} from './types/errors'
+export { BitriseError, ConfigurationError, NetworkError, UpdateError } from './types/errors'

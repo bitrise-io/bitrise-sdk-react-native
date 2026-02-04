@@ -4,12 +4,7 @@
  */
 
 // Re-export enums
-export {
-  InstallMode,
-  SyncStatus,
-  UpdateState,
-  CheckFrequency,
-} from './enums'
+export { InstallMode, SyncStatus, UpdateState, CheckFrequency } from './enums'
 
 // Re-export package types
 export type {

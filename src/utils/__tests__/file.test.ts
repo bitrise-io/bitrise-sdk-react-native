@@ -89,10 +89,7 @@ describe('file utilities', () => {
 
       const localPath = await savePackage(packageHash, data)
 
-      expect(PackageStorage.setPackageData).toHaveBeenCalledWith(
-        packageHash,
-        expect.any(String)
-      )
+      expect(PackageStorage.setPackageData).toHaveBeenCalledWith(packageHash, expect.any(String))
       expect(localPath).toBe('/codepush/abc123/index.bundle')
     })
 
@@ -111,14 +108,10 @@ describe('file utilities', () => {
       const packageHash = 'fail123'
       const data = new Uint8Array([1, 2, 3])
 
-      ;(PackageStorage.setPackageData as jest.Mock).mockRejectedValue(
-        new Error('Storage error')
-      )
+      ;(PackageStorage.setPackageData as jest.Mock).mockRejectedValue(new Error('Storage error'))
 
       await expect(savePackage(packageHash, data)).rejects.toThrow(UpdateError)
-      await expect(savePackage(packageHash, data)).rejects.toThrow(
-        'Failed to save package data'
-      )
+      await expect(savePackage(packageHash, data)).rejects.toThrow('Failed to save package data')
     })
   })
 
@@ -158,17 +151,12 @@ describe('file utilities', () => {
     it('should return null and log error if load fails', async () => {
       const localPath = '/codepush/error123/index.bundle'
 
-      ;(PackageStorage.getPackageData as jest.Mock).mockRejectedValue(
-        new Error('Load error')
-      )
+      ;(PackageStorage.getPackageData as jest.Mock).mockRejectedValue(new Error('Load error'))
 
       const data = await loadPackage(localPath)
 
       expect(data).toBeNull()
-      expect(console.error).toHaveBeenCalledWith(
-        '[CodePush] Failed to load package:',
-        'Load error'
-      )
+      expect(console.error).toHaveBeenCalledWith('[CodePush] Failed to load package:', 'Load error')
     })
   })
 
@@ -184,9 +172,7 @@ describe('file utilities', () => {
     it('should not throw if package not found', async () => {
       const localPath = '/codepush/notfound/index.bundle'
 
-      ;(PackageStorage.deletePackageData as jest.Mock).mockRejectedValue(
-        new Error('Not found')
-      )
+      ;(PackageStorage.deletePackageData as jest.Mock).mockRejectedValue(new Error('Not found'))
 
       // Should not throw
       await expect(deletePackage(localPath)).resolves.toBeUndefined()

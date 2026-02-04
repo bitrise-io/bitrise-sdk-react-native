@@ -103,10 +103,9 @@ export class BitriseClient {
       if (error instanceof NetworkError) {
         throw error
       }
-      throw new NetworkError(
-        'Failed to check for update',
-        { originalError: error instanceof Error ? error.message : String(error) }
-      )
+      throw new NetworkError('Failed to check for update', {
+        originalError: error instanceof Error ? error.message : String(error),
+      })
     }
   }
 
@@ -136,17 +135,16 @@ export class BitriseClient {
       }
     }
 
-    throw new NetworkError(
-      `Network request failed after ${maxRetries} attempts`,
-      { originalError: lastError?.message }
-    )
+    throw new NetworkError(`Network request failed after ${maxRetries} attempts`, {
+      originalError: lastError?.message,
+    })
   }
 
   /**
    * Sleep for specified milliseconds
    */
   private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms))
+    return new Promise(resolve => setTimeout(resolve, ms))
   }
 
   /**

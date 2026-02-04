@@ -172,7 +172,6 @@ describe('CodePush Download & Install Integration', () => {
           getReader: jest.fn().mockReturnValue(mockReader),
         },
       })
-
       ;(fileUtils.calculateHash as jest.Mock).mockResolvedValue('xyz789')
       ;(fileUtils.savePackage as jest.Mock).mockResolvedValue('/codepush/xyz789/index.bundle')
 
@@ -320,7 +319,6 @@ describe('CodePush Download & Install Integration', () => {
           getReader: jest.fn().mockReturnValue(mockReader),
         },
       })
-
       ;(fileUtils.calculateHash as jest.Mock).mockResolvedValue('progress123')
       ;(fileUtils.savePackage as jest.Mock).mockResolvedValue('/codepush/progress123/index.bundle')
 
@@ -382,7 +380,6 @@ describe('CodePush Download & Install Integration', () => {
           getReader: jest.fn().mockReturnValue(mockReader),
         },
       })
-
       ;(fileUtils.calculateHash as jest.Mock).mockResolvedValue('resume123')
       ;(fileUtils.savePackage as jest.Mock).mockResolvedValue('/codepush/resume123/index.bundle')
 

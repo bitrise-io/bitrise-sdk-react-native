@@ -124,9 +124,7 @@ describe('LocalPackageImpl', () => {
       const pkg = new LocalPackageImpl(mockPackageData)
 
       ;(PackageStorage.getPackageData as jest.Mock).mockResolvedValue('base64data')
-      ;(PackageStorage.setPendingPackage as jest.Mock).mockRejectedValue(
-        new Error('Storage error')
-      )
+      ;(PackageStorage.setPendingPackage as jest.Mock).mockRejectedValue(new Error('Storage error'))
 
       await expect(pkg.install()).rejects.toThrow(UpdateError)
       await expect(pkg.install()).rejects.toThrow('Failed to mark package as pending')
@@ -184,7 +182,6 @@ describe('LocalPackageImpl', () => {
       const pkg = new LocalPackageImpl(mockPackageData)
 
       expect(pkg.isPending).toBe(false)
-
       ;(PackageStorage.getPackageData as jest.Mock).mockResolvedValue('base64data')
       ;(PackageStorage.setPendingPackage as jest.Mock).mockResolvedValue(undefined)
       ;(PackageStorage.setInstallMetadata as jest.Mock).mockResolvedValue(undefined)

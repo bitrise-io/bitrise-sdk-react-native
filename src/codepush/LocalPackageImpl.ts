@@ -62,10 +62,15 @@ export class LocalPackageImpl implements LocalPackage {
       const mode = installMode ?? InstallMode.ON_NEXT_RESTART
 
       // Validate install mode
-      if (![InstallMode.IMMEDIATE, InstallMode.ON_NEXT_RESTART, InstallMode.ON_NEXT_RESUME, InstallMode.ON_NEXT_SUSPEND].includes(mode)) {
-        console.warn(
-          `[CodePush] Invalid install mode: ${mode}. Defaulting to ON_NEXT_RESTART.`
-        )
+      if (
+        ![
+          InstallMode.IMMEDIATE,
+          InstallMode.ON_NEXT_RESTART,
+          InstallMode.ON_NEXT_RESUME,
+          InstallMode.ON_NEXT_SUSPEND,
+        ].includes(mode)
+      ) {
+        console.warn(`[CodePush] Invalid install mode: ${mode}. Defaulting to ON_NEXT_RESTART.`)
       }
 
       // Verify package data exists
@@ -89,11 +94,8 @@ export class LocalPackageImpl implements LocalPackage {
 
       // Handle IMMEDIATE mode - trigger restart
       if (mode === InstallMode.IMMEDIATE) {
-        // Dynamic import to avoid circular dependency
-        const { CodePush } = await import('./CodePush')
-        // This will trigger restart (or log warning for MVP)
-        // We need to access the CodePush instance, but for now we'll just log
-        // TODO: Implement proper restart trigger in Phase 3
+        // TODO: Implement proper restart trigger in Phase 5
+        // For now, log a message - app will apply update on next natural restart
         console.log('[CodePush] Immediate restart requested. Call restartApp() to apply update.')
       }
     } catch (error) {

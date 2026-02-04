@@ -211,18 +211,15 @@ export class RemotePackageImpl implements RemotePackage {
           if (error instanceof NetworkError) {
             throw error
           }
-          throw new NetworkError(
-            `Download failed after ${maxRetries} attempts`,
-            {
-              url,
-              error: error instanceof Error ? error.message : String(error),
-            }
-          )
+          throw new NetworkError(`Download failed after ${maxRetries} attempts`, {
+            url,
+            error: error instanceof Error ? error.message : String(error),
+          })
         }
 
         // Exponential backoff: 1s, 2s, 4s
         const delay = Math.pow(2, attempt) * 1000
-        await new Promise((resolve) => setTimeout(resolve, delay))
+        await new Promise(resolve => setTimeout(resolve, delay))
       }
     }
 

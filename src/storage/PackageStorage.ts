@@ -147,9 +147,11 @@ export class PackageStorage {
   /**
    * Retrieve install metadata for a package
    */
-  static async getInstallMetadata(
-    packageHash: string
-  ): Promise<{ installMode: number; timestamp: number; minimumBackgroundDuration?: number } | null> {
+  static async getInstallMetadata(packageHash: string): Promise<{
+    installMode: number
+    timestamp: number
+    minimumBackgroundDuration?: number
+  } | null> {
     const key = `${STORAGE_KEYS.INSTALL_METADATA_PREFIX}${packageHash}`
     const data = this.cache.get(key)
     if (!data) {

@@ -106,7 +106,6 @@ describe('RemotePackageImpl', () => {
           getReader: jest.fn().mockReturnValue(mockReader),
         },
       })
-
       ;(fileUtils.calculateHash as jest.Mock).mockResolvedValue('abc123')
       ;(fileUtils.savePackage as jest.Mock).mockResolvedValue('/codepush/abc123/index.bundle')
 
@@ -124,7 +123,7 @@ describe('RemotePackageImpl', () => {
 
       // Mock a long-running download that will eventually complete
       let resolveDownload: (value: unknown) => void
-      const downloadPromise = new Promise((resolve) => {
+      const downloadPromise = new Promise(resolve => {
         resolveDownload = resolve
       })
 
@@ -135,9 +134,7 @@ describe('RemotePackageImpl', () => {
 
       // Try to start second download immediately
       await expect(pkg2.download()).rejects.toThrow(UpdateError)
-      await expect(pkg2.download()).rejects.toThrow(
-        'Download already in progress'
-      )
+      await expect(pkg2.download()).rejects.toThrow('Download already in progress')
 
       // Clean up - resolve the first download
       resolveDownload!({
@@ -178,7 +175,7 @@ describe('RemotePackageImpl', () => {
       ;(fileUtils.calculateHash as jest.Mock).mockResolvedValue('wronghash')
       ;(fileUtils.deletePackage as jest.Mock).mockResolvedValue(undefined)
 
-      const error = await pkg.download().catch((e) => e)
+      const error = await pkg.download().catch(e => e)
 
       expect(error).toBeInstanceOf(UpdateError)
       expect(error.message).toContain('Hash verification failed')
@@ -242,7 +239,6 @@ describe('RemotePackageImpl', () => {
             getReader: jest.fn().mockReturnValue(mockReader),
           },
         })
-
       ;(fileUtils.calculateHash as jest.Mock).mockResolvedValue('abc123')
       ;(fileUtils.savePackage as jest.Mock).mockResolvedValue('/codepush/abc123/index.bundle')
 
@@ -270,10 +266,9 @@ describe('RemotePackageImpl', () => {
         status: 404,
         statusText: 'Not Found',
       })
-
       ;(fileUtils.deletePackage as jest.Mock).mockResolvedValue(undefined)
 
-      const error = await pkg.download().catch((e) => e)
+      const error = await pkg.download().catch(e => e)
 
       expect(error).toBeInstanceOf(NetworkError)
       expect(error.message).toContain('HTTP 404: Not Found')
@@ -289,10 +284,9 @@ describe('RemotePackageImpl', () => {
         },
         body: null,
       })
-
       ;(fileUtils.deletePackage as jest.Mock).mockResolvedValue(undefined)
 
-      const error = await pkg.download().catch((e) => e)
+      const error = await pkg.download().catch(e => e)
 
       expect(error).toBeInstanceOf(NetworkError)
       expect(error.message).toContain('Response body is not readable')
@@ -321,7 +315,6 @@ describe('RemotePackageImpl', () => {
           getReader: jest.fn().mockReturnValue(mockReader),
         },
       })
-
       ;(fileUtils.calculateHash as jest.Mock).mockResolvedValue('abc123')
       ;(fileUtils.savePackage as jest.Mock).mockResolvedValue('/codepush/abc123/index.bundle')
 
@@ -356,7 +349,6 @@ describe('RemotePackageImpl', () => {
           getReader: jest.fn().mockReturnValue(mockReader),
         },
       })
-
       ;(fileUtils.calculateHash as jest.Mock).mockResolvedValue('abc123')
       ;(fileUtils.savePackage as jest.Mock).mockResolvedValue('/codepush/abc123/index.bundle')
 
