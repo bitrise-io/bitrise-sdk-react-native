@@ -1,5 +1,11 @@
 import { PackageStorage } from '../PackageStorage'
 import type { Package, LocalPackage } from '../../types/package'
+import { FileSystem } from '../../native/FileSystem'
+import { FileSystemStorage } from '../FileSystemStorage'
+
+// Mock FileSystem and FileSystemStorage
+jest.mock('../../native/FileSystem')
+jest.mock('../FileSystemStorage')
 
 describe('PackageStorage', () => {
   const mockPackage: Package = {
@@ -24,6 +30,10 @@ describe('PackageStorage', () => {
   beforeEach(() => {
     // Clear storage before each test
     PackageStorage.clear()
+    jest.clearAllMocks()
+
+    // Default: FileSystem not available
+    ;(FileSystem.isAvailable as jest.Mock).mockReturnValue(false)
   })
 
   describe('getCurrentPackage', () => {
@@ -199,6 +209,586 @@ describe('PackageStorage', () => {
       expect(await PackageStorage.getCurrentPackage()).toBeNull()
       expect(await PackageStorage.getPendingPackage()).toBeNull()
       expect(await PackageStorage.getFailedUpdates()).toEqual([])
+    })
+  })
+
+  describe('setPackageData', () => {
+    it('should store package data in-memory when filesystem not available', async () => {
+      const testData = btoa('test package data')
+      await PackageStorage.setPackageData('hash123', testData)
+
+      const retrieved = await PackageStorage.getPackageData('hash123')
+      expect(retrieved).toBe(testData)
+    })
+
+    it('should store different package data separately', async () => {
+      const data1 = btoa('package 1')
+      const data2 = btoa('package 2')
+
+      await PackageStorage.setPackageData('hash1', data1)
+      await PackageStorage.setPackageData('hash2', data2)
+
+      expect(await PackageStorage.getPackageData('hash1')).toBe(data1)
+      expect(await PackageStorage.getPackageData('hash2')).toBe(data2)
+    })
+
+    it('should overwrite existing package data', async () => {
+      const oldData = btoa('old data')
+      const newData = btoa('new data')
+
+      await PackageStorage.setPackageData('hash123', oldData)
+      await PackageStorage.setPackageData('hash123', newData)
+
+      expect(await PackageStorage.getPackageData('hash123')).toBe(newData)
+    })
+  })
+
+  describe('getPackageData', () => {
+    it('should return null when package data does not exist', async () => {
+      const result = await PackageStorage.getPackageData('nonexistent')
+      expect(result).toBeNull()
+    })
+
+    it('should retrieve stored package data', async () => {
+      const testData = btoa('test package data')
+      await PackageStorage.setPackageData('hash123', testData)
+
+      const retrieved = await PackageStorage.getPackageData('hash123')
+      expect(retrieved).toBe(testData)
+    })
+  })
+
+  describe('deletePackageData', () => {
+    it('should delete package data', async () => {
+      const testData = btoa('test data')
+      await PackageStorage.setPackageData('hash123', testData)
+
+      await PackageStorage.deletePackageData('hash123')
+
+      const retrieved = await PackageStorage.getPackageData('hash123')
+      expect(retrieved).toBeNull()
+    })
+
+    it('should not error when deleting non-existent package', async () => {
+      await expect(
+        PackageStorage.deletePackageData('nonexistent')
+      ).resolves.not.toThrow()
+    })
+
+    it('should only delete specified package data', async () => {
+      const data1 = btoa('package 1')
+      const data2 = btoa('package 2')
+
+      await PackageStorage.setPackageData('hash1', data1)
+      await PackageStorage.setPackageData('hash2', data2)
+
+      await PackageStorage.deletePackageData('hash1')
+
+      expect(await PackageStorage.getPackageData('hash1')).toBeNull()
+      expect(await PackageStorage.getPackageData('hash2')).toBe(data2)
+    })
+  })
+
+  describe('setInstallMetadata', () => {
+    it('should store install metadata', async () => {
+      const metadata = {
+        installMode: 1,
+        timestamp: Date.now(),
+      }
+
+      await PackageStorage.setInstallMetadata('hash123', metadata)
+
+      const retrieved = await PackageStorage.getInstallMetadata('hash123')
+      expect(retrieved).toEqual(metadata)
+    })
+
+    it('should store install metadata with minimumBackgroundDuration', async () => {
+      const metadata = {
+        installMode: 2,
+        timestamp: Date.now(),
+        minimumBackgroundDuration: 60,
+      }
+
+      await PackageStorage.setInstallMetadata('hash123', metadata)
+
+      const retrieved = await PackageStorage.getInstallMetadata('hash123')
+      expect(retrieved).toEqual(metadata)
+    })
+
+    it('should overwrite existing install metadata', async () => {
+      const oldMetadata = {
+        installMode: 1,
+        timestamp: Date.now() - 1000,
+      }
+      const newMetadata = {
+        installMode: 2,
+        timestamp: Date.now(),
+      }
+
+      await PackageStorage.setInstallMetadata('hash123', oldMetadata)
+      await PackageStorage.setInstallMetadata('hash123', newMetadata)
+
+      const retrieved = await PackageStorage.getInstallMetadata('hash123')
+      expect(retrieved).toEqual(newMetadata)
+    })
+  })
+
+  describe('getInstallMetadata', () => {
+    it('should return null when metadata does not exist', async () => {
+      const result = await PackageStorage.getInstallMetadata('nonexistent')
+      expect(result).toBeNull()
+    })
+
+    it('should retrieve stored install metadata', async () => {
+      const metadata = {
+        installMode: 1,
+        timestamp: Date.now(),
+      }
+
+      await PackageStorage.setInstallMetadata('hash123', metadata)
+
+      const retrieved = await PackageStorage.getInstallMetadata('hash123')
+      expect(retrieved).toEqual(metadata)
+    })
+  })
+
+  describe('setRollbackMetadata', () => {
+    it('should store rollback metadata', async () => {
+      const metadata = {
+        installedAt: Date.now(),
+        timeoutMinutes: 5,
+        maxRetries: 3,
+        retryCount: 0,
+        previousPackageHash: 'prev-hash',
+      }
+
+      await PackageStorage.setRollbackMetadata('hash123', metadata)
+
+      const retrieved = await PackageStorage.getRollbackMetadata('hash123')
+      expect(retrieved).toEqual(metadata)
+    })
+
+    it('should store rollback metadata for multiple packages', async () => {
+      const metadata1 = {
+        installedAt: Date.now(),
+        timeoutMinutes: 5,
+        maxRetries: 3,
+        retryCount: 0,
+        previousPackageHash: 'prev-1',
+      }
+      const metadata2 = {
+        installedAt: Date.now(),
+        timeoutMinutes: 10,
+        maxRetries: 5,
+        retryCount: 1,
+        previousPackageHash: 'prev-2',
+      }
+
+      await PackageStorage.setRollbackMetadata('hash1', metadata1)
+      await PackageStorage.setRollbackMetadata('hash2', metadata2)
+
+      expect(await PackageStorage.getRollbackMetadata('hash1')).toEqual(metadata1)
+      expect(await PackageStorage.getRollbackMetadata('hash2')).toEqual(metadata2)
+    })
+
+    it('should update retry count', async () => {
+      const metadata = {
+        installedAt: Date.now(),
+        timeoutMinutes: 5,
+        maxRetries: 3,
+        retryCount: 0,
+        previousPackageHash: 'prev-hash',
+      }
+
+      await PackageStorage.setRollbackMetadata('hash123', metadata)
+
+      const updatedMetadata = {
+        ...metadata,
+        retryCount: 1,
+      }
+
+      await PackageStorage.setRollbackMetadata('hash123', updatedMetadata)
+
+      const retrieved = await PackageStorage.getRollbackMetadata('hash123')
+      expect(retrieved?.retryCount).toBe(1)
+    })
+  })
+
+  describe('getRollbackMetadata', () => {
+    it('should return null when metadata does not exist', async () => {
+      const result = await PackageStorage.getRollbackMetadata('nonexistent')
+      expect(result).toBeNull()
+    })
+
+    it('should retrieve stored rollback metadata', async () => {
+      const metadata = {
+        installedAt: Date.now(),
+        timeoutMinutes: 5,
+        maxRetries: 3,
+        retryCount: 0,
+        previousPackageHash: 'prev-hash',
+      }
+
+      await PackageStorage.setRollbackMetadata('hash123', metadata)
+
+      const retrieved = await PackageStorage.getRollbackMetadata('hash123')
+      expect(retrieved).toEqual(metadata)
+    })
+  })
+
+  describe('clearRollbackMetadata', () => {
+    it('should clear rollback metadata for specific package', async () => {
+      const metadata = {
+        installedAt: Date.now(),
+        timeoutMinutes: 5,
+        maxRetries: 3,
+        retryCount: 0,
+        previousPackageHash: 'prev-hash',
+      }
+
+      await PackageStorage.setRollbackMetadata('hash123', metadata)
+      await PackageStorage.clearRollbackMetadata('hash123')
+
+      const retrieved = await PackageStorage.getRollbackMetadata('hash123')
+      expect(retrieved).toBeNull()
+    })
+
+    it('should clear all rollback metadata when no hash provided', async () => {
+      const metadata1 = {
+        installedAt: Date.now(),
+        timeoutMinutes: 5,
+        maxRetries: 3,
+        retryCount: 0,
+        previousPackageHash: 'prev-1',
+      }
+      const metadata2 = {
+        installedAt: Date.now(),
+        timeoutMinutes: 10,
+        maxRetries: 5,
+        retryCount: 1,
+        previousPackageHash: 'prev-2',
+      }
+
+      await PackageStorage.setRollbackMetadata('hash1', metadata1)
+      await PackageStorage.setRollbackMetadata('hash2', metadata2)
+
+      await PackageStorage.clearRollbackMetadata()
+
+      expect(await PackageStorage.getRollbackMetadata('hash1')).toBeNull()
+      expect(await PackageStorage.getRollbackMetadata('hash2')).toBeNull()
+    })
+
+    it('should only clear rollback metadata, not other data', async () => {
+      const metadata = {
+        installedAt: Date.now(),
+        timeoutMinutes: 5,
+        maxRetries: 3,
+        retryCount: 0,
+        previousPackageHash: 'prev-hash',
+      }
+
+      await PackageStorage.setCurrentPackage(mockPackage)
+      await PackageStorage.setRollbackMetadata('hash123', metadata)
+
+      await PackageStorage.clearRollbackMetadata()
+
+      expect(await PackageStorage.getRollbackMetadata('hash123')).toBeNull()
+      expect(await PackageStorage.getCurrentPackage()).toEqual(mockPackage)
+    })
+  })
+
+  describe('addToPackageHistory', () => {
+    it('should add package to history', async () => {
+      await PackageStorage.addToPackageHistory(mockPackage)
+
+      const history = await PackageStorage.getPackageHistory()
+      expect(history).toHaveLength(1)
+      expect(history[0]).toEqual(mockPackage)
+    })
+
+    it('should add multiple packages to history', async () => {
+      const pkg1 = { ...mockPackage, packageHash: 'hash1' }
+      const pkg2 = { ...mockPackage, packageHash: 'hash2' }
+      const pkg3 = { ...mockPackage, packageHash: 'hash3' }
+
+      await PackageStorage.addToPackageHistory(pkg1)
+      await PackageStorage.addToPackageHistory(pkg2)
+      await PackageStorage.addToPackageHistory(pkg3)
+
+      const history = await PackageStorage.getPackageHistory()
+      expect(history).toHaveLength(3)
+      expect(history[0]).toEqual(pkg3)
+      expect(history[1]).toEqual(pkg2)
+      expect(history[2]).toEqual(pkg1)
+    })
+
+    it('should keep only last 3 packages', async () => {
+      const pkg1 = { ...mockPackage, packageHash: 'hash1' }
+      const pkg2 = { ...mockPackage, packageHash: 'hash2' }
+      const pkg3 = { ...mockPackage, packageHash: 'hash3' }
+      const pkg4 = { ...mockPackage, packageHash: 'hash4' }
+
+      await PackageStorage.addToPackageHistory(pkg1)
+      await PackageStorage.addToPackageHistory(pkg2)
+      await PackageStorage.addToPackageHistory(pkg3)
+      await PackageStorage.addToPackageHistory(pkg4)
+
+      const history = await PackageStorage.getPackageHistory()
+      expect(history).toHaveLength(3)
+      expect(history[0]).toEqual(pkg4)
+      expect(history[1]).toEqual(pkg3)
+      expect(history[2]).toEqual(pkg2)
+      expect(history.find(p => p.packageHash === 'hash1')).toBeUndefined()
+    })
+
+    it('should not duplicate packages in history', async () => {
+      const pkg = { ...mockPackage, packageHash: 'hash1' }
+      const pkg2 = { ...mockPackage, packageHash: 'hash2' }
+
+      await PackageStorage.addToPackageHistory(pkg)
+      await PackageStorage.addToPackageHistory(pkg2)
+      await PackageStorage.addToPackageHistory(pkg)
+
+      const history = await PackageStorage.getPackageHistory()
+      expect(history).toHaveLength(2)
+      expect(history[0]).toEqual(pkg)
+      expect(history[1]).toEqual(pkg2)
+    })
+
+    it('should move existing package to front', async () => {
+      const pkg1 = { ...mockPackage, packageHash: 'hash1' }
+      const pkg2 = { ...mockPackage, packageHash: 'hash2' }
+      const pkg3 = { ...mockPackage, packageHash: 'hash3' }
+
+      await PackageStorage.addToPackageHistory(pkg1)
+      await PackageStorage.addToPackageHistory(pkg2)
+      await PackageStorage.addToPackageHistory(pkg3)
+
+      await PackageStorage.addToPackageHistory(pkg1)
+
+      const history = await PackageStorage.getPackageHistory()
+      expect(history).toHaveLength(3)
+      expect(history[0]).toEqual(pkg1)
+      expect(history[1]).toEqual(pkg3)
+      expect(history[2]).toEqual(pkg2)
+    })
+  })
+
+  describe('getPackageHistory', () => {
+    it('should return empty array when no history', async () => {
+      const history = await PackageStorage.getPackageHistory()
+      expect(history).toEqual([])
+    })
+
+    it('should return all packages in history', async () => {
+      const pkg1 = { ...mockPackage, packageHash: 'hash1' }
+      const pkg2 = { ...mockPackage, packageHash: 'hash2' }
+
+      await PackageStorage.addToPackageHistory(pkg1)
+      await PackageStorage.addToPackageHistory(pkg2)
+
+      const history = await PackageStorage.getPackageHistory()
+      expect(history).toHaveLength(2)
+      expect(history[0]).toEqual(pkg2)
+      expect(history[1]).toEqual(pkg1)
+    })
+  })
+
+  describe('getPackageByHash', () => {
+    it('should return null when package not in history', async () => {
+      const result = await PackageStorage.getPackageByHash('nonexistent')
+      expect(result).toBeNull()
+    })
+
+    it('should retrieve package from history by hash', async () => {
+      const pkg1 = { ...mockPackage, packageHash: 'hash1' }
+      const pkg2 = { ...mockPackage, packageHash: 'hash2' }
+
+      await PackageStorage.addToPackageHistory(pkg1)
+      await PackageStorage.addToPackageHistory(pkg2)
+
+      const retrieved = await PackageStorage.getPackageByHash('hash1')
+      expect(retrieved).toEqual(pkg1)
+    })
+
+    it('should return correct package when multiple in history', async () => {
+      const pkg1 = { ...mockPackage, packageHash: 'hash1', label: 'v1' }
+      const pkg2 = { ...mockPackage, packageHash: 'hash2', label: 'v2' }
+      const pkg3 = { ...mockPackage, packageHash: 'hash3', label: 'v3' }
+
+      await PackageStorage.addToPackageHistory(pkg1)
+      await PackageStorage.addToPackageHistory(pkg2)
+      await PackageStorage.addToPackageHistory(pkg3)
+
+      expect(await PackageStorage.getPackageByHash('hash1')).toEqual(pkg1)
+      expect(await PackageStorage.getPackageByHash('hash2')).toEqual(pkg2)
+      expect(await PackageStorage.getPackageByHash('hash3')).toEqual(pkg3)
+    })
+  })
+
+  describe('FileSystem integration', () => {
+    describe('setPackageData with FileSystem', () => {
+      it('should use filesystem when available', async () => {
+        ;(FileSystem.isAvailable as jest.Mock).mockReturnValue(true)
+        ;(FileSystemStorage.setPackageData as jest.Mock).mockResolvedValue(undefined)
+
+        const testData = btoa('test data')
+        await PackageStorage.setPackageData('hash123', testData)
+
+        expect(FileSystemStorage.setPackageData).toHaveBeenCalled()
+        expect(FileSystemStorage.setPackageData).toHaveBeenCalledWith(
+          'hash123',
+          expect.any(Uint8Array)
+        )
+      })
+
+      it('should fallback to in-memory when filesystem write fails', async () => {
+        ;(FileSystem.isAvailable as jest.Mock).mockReturnValue(true)
+        ;(FileSystemStorage.setPackageData as jest.Mock).mockRejectedValue(
+          new Error('Write failed')
+        )
+
+        const testData = btoa('test data')
+        await PackageStorage.setPackageData('hash123', testData)
+
+        // Should have tried filesystem
+        expect(FileSystemStorage.setPackageData).toHaveBeenCalled()
+
+        // Should fallback to in-memory
+        const retrieved = await PackageStorage.getPackageData('hash123')
+        expect(retrieved).toBe(testData)
+      })
+
+      it('should use in-memory when filesystem not available', async () => {
+        ;(FileSystem.isAvailable as jest.Mock).mockReturnValue(false)
+
+        const testData = btoa('test data')
+        await PackageStorage.setPackageData('hash123', testData)
+
+        expect(FileSystemStorage.setPackageData).not.toHaveBeenCalled()
+
+        const retrieved = await PackageStorage.getPackageData('hash123')
+        expect(retrieved).toBe(testData)
+      })
+    })
+
+    describe('getPackageData with FileSystem', () => {
+      it('should use filesystem when available', async () => {
+        const testData = new Uint8Array([1, 2, 3, 4, 5])
+        ;(FileSystem.isAvailable as jest.Mock).mockReturnValue(true)
+        ;(FileSystemStorage.getPackageData as jest.Mock).mockResolvedValue(testData)
+
+        const result = await PackageStorage.getPackageData('hash123')
+
+        expect(FileSystemStorage.getPackageData).toHaveBeenCalledWith('hash123')
+        expect(result).toBeDefined()
+      })
+
+      it('should fallback to in-memory when filesystem read fails', async () => {
+        ;(FileSystem.isAvailable as jest.Mock).mockReturnValue(true)
+        ;(FileSystemStorage.getPackageData as jest.Mock).mockRejectedValue(
+          new Error('Read failed')
+        )
+
+        // Store in in-memory first
+        const testData = btoa('test data')
+        ;(FileSystem.isAvailable as jest.Mock).mockReturnValue(false)
+        await PackageStorage.setPackageData('hash123', testData)
+
+        // Now try to read with filesystem enabled but failing
+        ;(FileSystem.isAvailable as jest.Mock).mockReturnValue(true)
+        const retrieved = await PackageStorage.getPackageData('hash123')
+
+        expect(FileSystemStorage.getPackageData).toHaveBeenCalled()
+        expect(retrieved).toBe(testData)
+      })
+
+      it('should return null when filesystem returns null', async () => {
+        ;(FileSystem.isAvailable as jest.Mock).mockReturnValue(true)
+        ;(FileSystemStorage.getPackageData as jest.Mock).mockResolvedValue(null)
+
+        const result = await PackageStorage.getPackageData('hash123')
+
+        expect(result).toBeNull()
+      })
+    })
+
+    describe('deletePackageData with FileSystem', () => {
+      it('should use filesystem when available', async () => {
+        ;(FileSystem.isAvailable as jest.Mock).mockReturnValue(true)
+        ;(FileSystemStorage.deletePackageData as jest.Mock).mockResolvedValue(undefined)
+
+        await PackageStorage.deletePackageData('hash123')
+
+        expect(FileSystemStorage.deletePackageData).toHaveBeenCalledWith('hash123')
+      })
+
+      it('should continue even if filesystem delete fails', async () => {
+        ;(FileSystem.isAvailable as jest.Mock).mockReturnValue(true)
+        ;(FileSystemStorage.deletePackageData as jest.Mock).mockRejectedValue(
+          new Error('Delete failed')
+        )
+
+        await expect(PackageStorage.deletePackageData('hash123')).resolves.not.toThrow()
+
+        expect(FileSystemStorage.deletePackageData).toHaveBeenCalled()
+      })
+
+      it('should delete from both filesystem and in-memory', async () => {
+        // Store in in-memory
+        const testData = btoa('test data')
+        await PackageStorage.setPackageData('hash123', testData)
+
+        // Enable filesystem and delete
+        ;(FileSystem.isAvailable as jest.Mock).mockReturnValue(true)
+        ;(FileSystemStorage.deletePackageData as jest.Mock).mockResolvedValue(undefined)
+
+        await PackageStorage.deletePackageData('hash123')
+
+        expect(FileSystemStorage.deletePackageData).toHaveBeenCalled()
+
+        // Verify deleted from in-memory
+        ;(FileSystem.isAvailable as jest.Mock).mockReturnValue(false)
+        const retrieved = await PackageStorage.getPackageData('hash123')
+        expect(retrieved).toBeNull()
+      })
+    })
+
+    describe('base64 conversion', () => {
+      it('should correctly convert between base64 and Uint8Array', async () => {
+        const originalData = 'Hello, World!'
+        const base64Data = btoa(originalData)
+
+        await PackageStorage.setPackageData('hash123', base64Data)
+        const retrieved = await PackageStorage.getPackageData('hash123')
+
+        expect(retrieved).toBe(base64Data)
+
+        // Verify round-trip conversion
+        const decoded = atob(retrieved!)
+        expect(decoded).toBe(originalData)
+      })
+
+      it('should handle empty data', async () => {
+        const emptyData = btoa('') // Returns empty string
+
+        await PackageStorage.setPackageData('hash123', emptyData)
+        const retrieved = await PackageStorage.getPackageData('hash123')
+
+        // Empty string is treated as null due to || null in getPackageData
+        expect(retrieved).toBeNull()
+      })
+
+      it('should handle binary data', async () => {
+        // Create some binary data
+        const binaryString = String.fromCharCode(0, 1, 2, 255, 254, 253)
+        const base64Data = btoa(binaryString)
+
+        await PackageStorage.setPackageData('hash123', base64Data)
+        const retrieved = await PackageStorage.getPackageData('hash123')
+
+        expect(retrieved).toBe(base64Data)
+      })
     })
   })
 })
