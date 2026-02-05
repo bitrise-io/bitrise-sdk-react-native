@@ -49,11 +49,7 @@ export class QueueStatisticsTracker {
   /**
    * Record a successful download
    */
-  recordSuccess(
-    waitTimeMs: number,
-    downloadTimeMs: number,
-    bytesDownloaded: number
-  ): void {
+  recordSuccess(waitTimeMs: number, downloadTimeMs: number, bytesDownloaded: number): void {
     this.totalDownloads++
     this.successfulDownloads++
     this.totalWaitTime += waitTimeMs
@@ -93,18 +89,13 @@ export class QueueStatisticsTracker {
    * Get current statistics
    */
   getStatistics(currentQueueSize: number): QueueStatistics {
-    const successRate =
-      this.totalDownloads > 0
-        ? this.successfulDownloads / this.totalDownloads
-        : 0
+    const successRate = this.totalDownloads > 0 ? this.successfulDownloads / this.totalDownloads : 0
 
-    const averageWaitTime =
-      this.totalDownloads > 0 ? this.totalWaitTime / this.totalDownloads : 0
+    const averageWaitTime = this.totalDownloads > 0 ? this.totalWaitTime / this.totalDownloads : 0
 
     const averageDownloadTime =
       this.successfulDownloads + this.failedDownloads > 0
-        ? this.totalDownloadTime /
-          (this.successfulDownloads + this.failedDownloads)
+        ? this.totalDownloadTime / (this.successfulDownloads + this.failedDownloads)
         : 0
 
     return {

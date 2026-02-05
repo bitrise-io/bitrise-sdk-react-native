@@ -98,9 +98,7 @@ describe('SimpleEventEmitter', () => {
     })
 
     it('catches and logs errors in callbacks', () => {
-      const consoleErrorSpy = jest
-        .spyOn(console, 'error')
-        .mockImplementation()
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation()
       const callback1 = jest.fn(() => {
         throw new Error('Test error')
       })

@@ -17,6 +17,20 @@ const STORAGE_KEYS = {
 } as const
 
 /**
+ * Failed update entry with timestamp for time-based expiration
+ */
+export interface FailedUpdateEntry {
+  packageHash: string
+  failedAt: number
+  reason?: string
+}
+
+/**
+ * Default expiration time for failed updates: 7 days in milliseconds
+ */
+const FAILED_UPDATE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000
+
+/**
  * Package storage using persistent filesystem-backed storage with in-memory cache
  * Provides thread-safe operations through operation queuing
  */
@@ -57,21 +71,70 @@ export class PackageStorage {
   }
 
   /**
-   * Get the list of failed update hashes
+   * Get the list of failed update hashes (filtered by expiration)
+   * Automatically cleans up expired entries
    */
   static async getFailedUpdates(): Promise<string[]> {
-    return (await PersistentStorage.getItem<string[]>(STORAGE_KEYS.FAILED_UPDATES, [])) || []
+    const entries = await this.getFailedUpdateEntries()
+    return entries.map(e => e.packageHash)
   }
 
   /**
-   * Mark an update as failed
+   * Get failed update entries with full metadata
+   * Filters out expired entries and persists the cleanup
    */
-  static async markUpdateFailed(packageHash: string): Promise<void> {
-    const failed = await this.getFailedUpdates()
-    if (!failed.includes(packageHash)) {
-      failed.push(packageHash)
-      await PersistentStorage.setItem(STORAGE_KEYS.FAILED_UPDATES, failed)
+  static async getFailedUpdateEntries(): Promise<FailedUpdateEntry[]> {
+    const raw = await PersistentStorage.getItem<FailedUpdateEntry[] | string[]>(
+      STORAGE_KEYS.FAILED_UPDATES,
+      []
+    )
+
+    if (!raw || raw.length === 0) {
+      return []
     }
+
+    // Handle migration from old string[] format
+    if (typeof raw[0] === 'string') {
+      const migrated = (raw as string[]).map(hash => ({
+        packageHash: hash,
+        failedAt: Date.now(), // Assume failed recently during migration
+      }))
+      await this.setFailedUpdateEntries(migrated)
+      return migrated
+    }
+
+    const entries = raw as FailedUpdateEntry[]
+    const now = Date.now()
+
+    // Filter out expired entries
+    const validEntries = entries.filter(entry => now - entry.failedAt < FAILED_UPDATE_EXPIRY_MS)
+
+    // Clean up expired entries if any were removed
+    if (validEntries.length !== entries.length) {
+      await this.setFailedUpdateEntries(validEntries)
+    }
+
+    return validEntries
+  }
+
+  /**
+   * Mark an update as failed with timestamp
+   */
+  static async markUpdateFailed(packageHash: string, reason?: string): Promise<void> {
+    const entries = await this.getFailedUpdateEntries()
+
+    // Check if already exists
+    if (entries.some(e => e.packageHash === packageHash)) {
+      return // Already marked as failed
+    }
+
+    entries.push({
+      packageHash,
+      failedAt: Date.now(),
+      reason,
+    })
+
+    await this.setFailedUpdateEntries(entries)
   }
 
   /**
@@ -82,7 +145,27 @@ export class PackageStorage {
     if (hashes.length === 0) {
       await PersistentStorage.removeItem(STORAGE_KEYS.FAILED_UPDATES)
     } else {
-      await PersistentStorage.setItem(STORAGE_KEYS.FAILED_UPDATES, hashes)
+      // Convert simple hashes to full entries (preserve existing timestamps if available)
+      const existingEntries = await this.getFailedUpdateEntries()
+      const now = Date.now()
+
+      const entries: FailedUpdateEntry[] = hashes.map(hash => {
+        const existing = existingEntries.find(e => e.packageHash === hash)
+        return existing || { packageHash: hash, failedAt: now }
+      })
+
+      await this.setFailedUpdateEntries(entries)
+    }
+  }
+
+  /**
+   * Set failed update entries (internal)
+   */
+  private static async setFailedUpdateEntries(entries: FailedUpdateEntry[]): Promise<void> {
+    if (entries.length === 0) {
+      await PersistentStorage.removeItem(STORAGE_KEYS.FAILED_UPDATES)
+    } else {
+      await PersistentStorage.setItem(STORAGE_KEYS.FAILED_UPDATES, entries)
     }
   }
 

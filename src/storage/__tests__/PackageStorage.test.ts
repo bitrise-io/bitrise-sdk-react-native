@@ -200,6 +200,96 @@ describe('PackageStorage', () => {
     })
   })
 
+  describe('failed updates expiration', () => {
+    beforeEach(() => {
+      jest.useFakeTimers()
+      jest.setSystemTime(new Date('2024-01-01T00:00:00Z'))
+    })
+
+    afterEach(() => {
+      jest.useRealTimers()
+    })
+
+    it('should include entries that are not expired', async () => {
+      await PackageStorage.markUpdateFailed('hash1')
+
+      // Advance time by 6 days (less than 7 day expiry)
+      jest.advanceTimersByTime(6 * 24 * 60 * 60 * 1000)
+
+      const result = await PackageStorage.getFailedUpdates()
+      expect(result).toContain('hash1')
+    })
+
+    it('should exclude entries that have expired', async () => {
+      await PackageStorage.markUpdateFailed('hash1')
+
+      // Advance time by 8 days (more than 7 day expiry)
+      jest.advanceTimersByTime(8 * 24 * 60 * 60 * 1000)
+
+      const result = await PackageStorage.getFailedUpdates()
+      expect(result).not.toContain('hash1')
+    })
+
+    it('should keep non-expired entries when some expire', async () => {
+      await PackageStorage.markUpdateFailed('hash1')
+
+      // Advance 4 days and add another
+      jest.advanceTimersByTime(4 * 24 * 60 * 60 * 1000)
+      await PackageStorage.markUpdateFailed('hash2')
+
+      // Advance 4 more days (hash1 is now 8 days old, hash2 is 4 days old)
+      jest.advanceTimersByTime(4 * 24 * 60 * 60 * 1000)
+
+      const result = await PackageStorage.getFailedUpdates()
+      expect(result).not.toContain('hash1')
+      expect(result).toContain('hash2')
+    })
+
+    it('should return entries with full metadata via getFailedUpdateEntries', async () => {
+      await PackageStorage.markUpdateFailed('hash1', 'Rollback timeout')
+
+      const entries = await PackageStorage.getFailedUpdateEntries()
+      expect(entries).toHaveLength(1)
+      expect(entries[0]).toEqual({
+        packageHash: 'hash1',
+        failedAt: expect.any(Number),
+        reason: 'Rollback timeout',
+      })
+    })
+
+    it('should migrate old string[] format to new format', async () => {
+      // Directly set old format via internal storage
+      const { PersistentStorage } = await import('../../utils/storage')
+      await PersistentStorage.setItem('@bitrise/codepush/failedUpdates', ['oldHash1', 'oldHash2'])
+
+      const result = await PackageStorage.getFailedUpdates()
+      expect(result).toEqual(['oldHash1', 'oldHash2'])
+
+      // After migration, entries should have timestamps
+      const entries = await PackageStorage.getFailedUpdateEntries()
+      expect(entries[0]).toHaveProperty('failedAt')
+      expect(entries[0]).toHaveProperty('packageHash', 'oldHash1')
+    })
+
+    it('should clean up expired entries on read', async () => {
+      await PackageStorage.markUpdateFailed('hash1')
+
+      // Advance past expiry
+      jest.advanceTimersByTime(8 * 24 * 60 * 60 * 1000)
+
+      // Reading should trigger cleanup
+      await PackageStorage.getFailedUpdates()
+
+      // Add new entry
+      await PackageStorage.markUpdateFailed('hash2')
+
+      // Verify only new entry exists
+      const entries = await PackageStorage.getFailedUpdateEntries()
+      expect(entries).toHaveLength(1)
+      expect(entries[0].packageHash).toBe('hash2')
+    })
+  })
+
   describe('clear', () => {
     it('should clear all storage', async () => {
       const localPkg = createMockLocalPackage()
@@ -273,9 +363,7 @@ describe('PackageStorage', () => {
     })
 
     it('should not error when deleting non-existent package', async () => {
-      await expect(
-        PackageStorage.deletePackageData('nonexistent')
-      ).resolves.not.toThrow()
+      await expect(PackageStorage.deletePackageData('nonexistent')).resolves.not.toThrow()
     })
 
     it('should only delete specified package data', async () => {
@@ -689,9 +777,7 @@ describe('PackageStorage', () => {
 
       it('should fallback to in-memory when filesystem read fails', async () => {
         ;(FileSystem.isAvailable as jest.Mock).mockReturnValue(true)
-        ;(FileSystemStorage.getPackageData as jest.Mock).mockRejectedValue(
-          new Error('Read failed')
-        )
+        ;(FileSystemStorage.getPackageData as jest.Mock).mockRejectedValue(new Error('Read failed'))
 
         // Store in in-memory first
         const testData = btoa('test data')

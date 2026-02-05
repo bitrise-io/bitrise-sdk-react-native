@@ -44,12 +44,7 @@ export class DownloadTimeoutError extends QueueError {
     public readonly timeoutMs: number,
     queueItemId?: string
   ) {
-    super(
-      `Download timed out after ${timeoutMs}ms`,
-      queueItemId,
-      packageHash,
-      { timeoutMs }
-    )
+    super(`Download timed out after ${timeoutMs}ms`, queueItemId, packageHash, { timeoutMs })
     this.name = 'DownloadTimeoutError'
     Object.setPrototypeOf(this, DownloadTimeoutError.prototype)
   }

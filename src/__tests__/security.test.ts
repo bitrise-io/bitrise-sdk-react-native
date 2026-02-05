@@ -304,9 +304,9 @@ describe('Security Audit', () => {
       )
 
       // Should not crash on storage errors
-      await expect(
-        PackageStorage.setCurrentPackage({} as any)
-      ).rejects.toThrow('QuotaExceededError')
+      await expect(PackageStorage.setCurrentPackage({} as any)).rejects.toThrow(
+        'QuotaExceededError'
+      )
     })
 
     it('should clear sensitive data on logout/clear', async () => {
@@ -355,7 +355,7 @@ describe('Security Audit', () => {
       ;(BitriseClient.prototype.checkForUpdate as jest.Mock).mockRejectedValue(error)
 
       const codePush = new CodePush(validConfig)
-      const result = await codePush.checkForUpdate().catch((e) => e)
+      const result = await codePush.checkForUpdate().catch(e => e)
 
       // Errors may be caught internally or returned as null
       // The key requirement is that if errors are exposed, they don't contain sensitive paths
@@ -373,11 +373,10 @@ describe('Security Audit', () => {
     it('should not include stack traces with sensitive info', async () => {
       const error = new Error('Database password: secret123')
       error.stack = 'Error: Database password: secret123\n  at /app/secrets/config.js:42:15'
-
       ;(BitriseClient.prototype.checkForUpdate as jest.Mock).mockRejectedValue(error)
 
       const codePush = new CodePush(validConfig)
-      const result = await codePush.checkForUpdate().catch((e) => e)
+      const result = await codePush.checkForUpdate().catch(e => e)
 
       // The SDK should never expose sensitive information in error messages or stack traces
       // This test documents the security requirement
@@ -460,7 +459,7 @@ describe('Security Audit', () => {
   describe('Dependency Security', () => {
     it('should use minimal dependencies', () => {
       // Read package.json to verify minimal dependency count
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+
       const packageJson = require('../../package.json')
       const dependencies = Object.keys(packageJson.dependencies || {})
 
@@ -470,7 +469,7 @@ describe('Security Audit', () => {
 
       // No known security-risky dependencies
       const bannedDependencies = ['lodash', 'moment', 'request']
-      bannedDependencies.forEach((dep) => {
+      bannedDependencies.forEach(dep => {
         expect(dependencies).not.toContain(dep)
       })
     })
@@ -481,7 +480,7 @@ describe('Security Audit', () => {
       // Verify we're using a secure hash algorithm
       // SHA-256 is the standard, MD5 and SHA-1 are considered weak
       // This is verified by checking that file utils use crypto with SHA-256
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+
       const fs = require('fs')
       const fileUtilsPath = require.resolve('../utils/file')
       const fileUtilsContent = fs.readFileSync(fileUtilsPath, 'utf8')

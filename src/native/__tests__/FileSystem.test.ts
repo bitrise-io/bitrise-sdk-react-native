@@ -42,19 +42,13 @@ describe('FileSystem', () => {
     it('throws when native module unavailable', async () => {
       NativeModules.BitriseFileSystem = null
 
-      await expect(FileSystem.getStorageDirectory()).rejects.toThrow(
-        FileSystemError
-      )
-      await expect(FileSystem.getStorageDirectory()).rejects.toThrow(
-        'FileSystem not available'
-      )
+      await expect(FileSystem.getStorageDirectory()).rejects.toThrow(FileSystemError)
+      await expect(FileSystem.getStorageDirectory()).rejects.toThrow('FileSystem not available')
     })
 
     it('returns storage directory path', async () => {
       NativeModules.BitriseFileSystem = mockNativeModule
-      mockNativeModule.getDocumentsDirectory.mockResolvedValue(
-        '/path/to/storage'
-      )
+      mockNativeModule.getDocumentsDirectory.mockResolvedValue('/path/to/storage')
 
       const path = await FileSystem.getStorageDirectory()
 
@@ -67,9 +61,7 @@ describe('FileSystem', () => {
       const error = new Error('Permission denied')
       mockNativeModule.getDocumentsDirectory.mockRejectedValue(error)
 
-      await expect(FileSystem.getStorageDirectory()).rejects.toThrow(
-        FileSystemError
-      )
+      await expect(FileSystem.getStorageDirectory()).rejects.toThrow(FileSystemError)
       await expect(FileSystem.getStorageDirectory()).rejects.toThrow(
         'Failed to get storage directory'
       )
@@ -81,9 +73,7 @@ describe('FileSystem', () => {
       NativeModules.BitriseFileSystem = null
       const data = new Uint8Array([1, 2, 3])
 
-      await expect(FileSystem.writeFile('/path/to/file', data)).rejects.toThrow(
-        FileSystemError
-      )
+      await expect(FileSystem.writeFile('/path/to/file', data)).rejects.toThrow(FileSystemError)
     })
 
     it('writes file successfully', async () => {
@@ -107,9 +97,7 @@ describe('FileSystem', () => {
 
       const data = new Uint8Array([1, 2, 3])
 
-      await expect(FileSystem.writeFile('/path/to/file', data)).rejects.toThrow(
-        FileSystemError
-      )
+      await expect(FileSystem.writeFile('/path/to/file', data)).rejects.toThrow(FileSystemError)
       await expect(FileSystem.writeFile('/path/to/file', data)).rejects.toThrow(
         'Failed to write file'
       )
@@ -122,10 +110,7 @@ describe('FileSystem', () => {
       const data = new Uint8Array([])
       await FileSystem.writeFile('/path/to/file', data)
 
-      expect(mockNativeModule.writeFile).toHaveBeenCalledWith(
-        '/path/to/file',
-        ''
-      )
+      expect(mockNativeModule.writeFile).toHaveBeenCalledWith('/path/to/file', '')
     })
 
     it('handles large data', async () => {
@@ -145,9 +130,7 @@ describe('FileSystem', () => {
     it('throws when native module unavailable', async () => {
       NativeModules.BitriseFileSystem = null
 
-      await expect(FileSystem.readFile('/path/to/file')).rejects.toThrow(
-        FileSystemError
-      )
+      await expect(FileSystem.readFile('/path/to/file')).rejects.toThrow(FileSystemError)
     })
 
     it('returns null when file does not exist', async () => {
@@ -175,12 +158,8 @@ describe('FileSystem', () => {
       const error = new Error('Permission denied')
       mockNativeModule.readFile.mockRejectedValue(error)
 
-      await expect(FileSystem.readFile('/path/to/file')).rejects.toThrow(
-        FileSystemError
-      )
-      await expect(FileSystem.readFile('/path/to/file')).rejects.toThrow(
-        'Failed to read file'
-      )
+      await expect(FileSystem.readFile('/path/to/file')).rejects.toThrow(FileSystemError)
+      await expect(FileSystem.readFile('/path/to/file')).rejects.toThrow('Failed to read file')
     })
   })
 
@@ -188,9 +167,7 @@ describe('FileSystem', () => {
     it('throws when native module unavailable', async () => {
       NativeModules.BitriseFileSystem = null
 
-      await expect(FileSystem.deleteFile('/path/to/file')).rejects.toThrow(
-        FileSystemError
-      )
+      await expect(FileSystem.deleteFile('/path/to/file')).rejects.toThrow(FileSystemError)
     })
 
     it('returns false when file does not exist', async () => {
@@ -218,9 +195,7 @@ describe('FileSystem', () => {
       const error = new Error('Permission denied')
       mockNativeModule.deleteFile.mockRejectedValue(error)
 
-      await expect(FileSystem.deleteFile('/path/to/file')).rejects.toThrow(
-        FileSystemError
-      )
+      await expect(FileSystem.deleteFile('/path/to/file')).rejects.toThrow(FileSystemError)
     })
   })
 
@@ -228,9 +203,7 @@ describe('FileSystem', () => {
     it('throws when native module unavailable', async () => {
       NativeModules.BitriseFileSystem = null
 
-      await expect(FileSystem.fileExists('/path/to/file')).rejects.toThrow(
-        FileSystemError
-      )
+      await expect(FileSystem.fileExists('/path/to/file')).rejects.toThrow(FileSystemError)
     })
 
     it('returns true when file exists', async () => {
@@ -257,9 +230,7 @@ describe('FileSystem', () => {
       const error = new Error('Permission denied')
       mockNativeModule.fileExists.mockRejectedValue(error)
 
-      await expect(FileSystem.fileExists('/path/to/file')).rejects.toThrow(
-        FileSystemError
-      )
+      await expect(FileSystem.fileExists('/path/to/file')).rejects.toThrow(FileSystemError)
     })
   })
 
@@ -267,9 +238,7 @@ describe('FileSystem', () => {
     it('throws when native module unavailable', async () => {
       NativeModules.BitriseFileSystem = null
 
-      await expect(FileSystem.getFileSize('/path/to/file')).rejects.toThrow(
-        FileSystemError
-      )
+      await expect(FileSystem.getFileSize('/path/to/file')).rejects.toThrow(FileSystemError)
     })
 
     it('returns 0 when file does not exist', async () => {
@@ -296,9 +265,7 @@ describe('FileSystem', () => {
       const error = new Error('Permission denied')
       mockNativeModule.getFileSize.mockRejectedValue(error)
 
-      await expect(FileSystem.getFileSize('/path/to/file')).rejects.toThrow(
-        FileSystemError
-      )
+      await expect(FileSystem.getFileSize('/path/to/file')).rejects.toThrow(FileSystemError)
     })
   })
 
@@ -306,9 +273,7 @@ describe('FileSystem', () => {
     it('throws when native module unavailable', async () => {
       NativeModules.BitriseFileSystem = null
 
-      await expect(FileSystem.createDirectory('/path/to/dir')).rejects.toThrow(
-        FileSystemError
-      )
+      await expect(FileSystem.createDirectory('/path/to/dir')).rejects.toThrow(FileSystemError)
     })
 
     it('creates directory successfully', async () => {
@@ -317,9 +282,7 @@ describe('FileSystem', () => {
 
       await FileSystem.createDirectory('/path/to/dir')
 
-      expect(mockNativeModule.createDirectory).toHaveBeenCalledWith(
-        '/path/to/dir'
-      )
+      expect(mockNativeModule.createDirectory).toHaveBeenCalledWith('/path/to/dir')
     })
 
     it('throws FileSystemError on creation failure', async () => {
@@ -327,9 +290,7 @@ describe('FileSystem', () => {
       const error = new Error('Permission denied')
       mockNativeModule.createDirectory.mockRejectedValue(error)
 
-      await expect(FileSystem.createDirectory('/path/to/dir')).rejects.toThrow(
-        FileSystemError
-      )
+      await expect(FileSystem.createDirectory('/path/to/dir')).rejects.toThrow(FileSystemError)
       await expect(FileSystem.createDirectory('/path/to/dir')).rejects.toThrow(
         'Failed to create directory'
       )
@@ -340,9 +301,7 @@ describe('FileSystem', () => {
     it('throws when native module unavailable', async () => {
       NativeModules.BitriseFileSystem = null
 
-      await expect(FileSystem.listDirectory('/path/to/dir')).rejects.toThrow(
-        FileSystemError
-      )
+      await expect(FileSystem.listDirectory('/path/to/dir')).rejects.toThrow(FileSystemError)
     })
 
     it('returns empty array when directory does not exist', async () => {
@@ -369,9 +328,7 @@ describe('FileSystem', () => {
       const error = new Error('Permission denied')
       mockNativeModule.listDirectory.mockRejectedValue(error)
 
-      await expect(FileSystem.listDirectory('/path/to/dir')).rejects.toThrow(
-        FileSystemError
-      )
+      await expect(FileSystem.listDirectory('/path/to/dir')).rejects.toThrow(FileSystemError)
     })
   })
 

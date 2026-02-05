@@ -23,10 +23,7 @@ describe('FileSystemStorage', () => {
 
       await FileSystemStorage.setPackageData(hash, data)
 
-      expect(mockFileSystem.writeFile).toHaveBeenCalledWith(
-        '/storage/packages/abc123.dat',
-        data
-      )
+      expect(mockFileSystem.writeFile).toHaveBeenCalledWith('/storage/packages/abc123.dat', data)
     })
 
     it('creates storage directories on first call', async () => {
@@ -37,12 +34,8 @@ describe('FileSystemStorage', () => {
 
       await FileSystemStorage.setPackageData(hash, data)
 
-      expect(mockFileSystem.createDirectory).toHaveBeenCalledWith(
-        '/storage/packages'
-      )
-      expect(mockFileSystem.createDirectory).toHaveBeenCalledWith(
-        '/storage/metadata'
-      )
+      expect(mockFileSystem.createDirectory).toHaveBeenCalledWith('/storage/packages')
+      expect(mockFileSystem.createDirectory).toHaveBeenCalledWith('/storage/metadata')
     })
   })
 
@@ -53,9 +46,7 @@ describe('FileSystemStorage', () => {
       const data = await FileSystemStorage.getPackageData('abc123')
 
       expect(data).toBeNull()
-      expect(mockFileSystem.readFile).toHaveBeenCalledWith(
-        '/storage/packages/abc123.dat'
-      )
+      expect(mockFileSystem.readFile).toHaveBeenCalledWith('/storage/packages/abc123.dat')
     })
 
     it('returns package data when it exists', async () => {
@@ -75,9 +66,7 @@ describe('FileSystemStorage', () => {
       const result = await FileSystemStorage.deletePackageData('abc123')
 
       expect(result).toBe(false)
-      expect(mockFileSystem.deleteFile).toHaveBeenCalledWith(
-        '/storage/packages/abc123.dat'
-      )
+      expect(mockFileSystem.deleteFile).toHaveBeenCalledWith('/storage/packages/abc123.dat')
     })
 
     it('returns true when package deleted', async () => {
@@ -96,9 +85,7 @@ describe('FileSystemStorage', () => {
       const exists = await FileSystemStorage.hasPackageData('abc123')
 
       expect(exists).toBe(false)
-      expect(mockFileSystem.fileExists).toHaveBeenCalledWith(
-        '/storage/packages/abc123.dat'
-      )
+      expect(mockFileSystem.fileExists).toHaveBeenCalledWith('/storage/packages/abc123.dat')
     })
 
     it('returns true when package exists', async () => {
@@ -125,9 +112,7 @@ describe('FileSystemStorage', () => {
       const size = await FileSystemStorage.getPackageSize('abc123')
 
       expect(size).toBe(1024)
-      expect(mockFileSystem.getFileSize).toHaveBeenCalledWith(
-        '/storage/packages/abc123.dat'
-      )
+      expect(mockFileSystem.getFileSize).toHaveBeenCalledWith('/storage/packages/abc123.dat')
     })
   })
 
@@ -168,9 +153,7 @@ describe('FileSystemStorage', () => {
       const result = await FileSystemStorage.getPackageMetadata('abc123')
 
       expect(result).toEqual(metadata)
-      expect(mockFileSystem.readFile).toHaveBeenCalledWith(
-        '/storage/metadata/abc123.json'
-      )
+      expect(mockFileSystem.readFile).toHaveBeenCalledWith('/storage/metadata/abc123.json')
     })
   })
 
@@ -181,9 +164,7 @@ describe('FileSystemStorage', () => {
       const result = await FileSystemStorage.deletePackageMetadata('abc123')
 
       expect(result).toBe(true)
-      expect(mockFileSystem.deleteFile).toHaveBeenCalledWith(
-        '/storage/metadata/abc123.json'
-      )
+      expect(mockFileSystem.deleteFile).toHaveBeenCalledWith('/storage/metadata/abc123.json')
     })
   })
 
@@ -193,12 +174,8 @@ describe('FileSystemStorage', () => {
 
       await FileSystemStorage.deletePackage('abc123')
 
-      expect(mockFileSystem.deleteFile).toHaveBeenCalledWith(
-        '/storage/packages/abc123.dat'
-      )
-      expect(mockFileSystem.deleteFile).toHaveBeenCalledWith(
-        '/storage/metadata/abc123.json'
-      )
+      expect(mockFileSystem.deleteFile).toHaveBeenCalledWith('/storage/packages/abc123.dat')
+      expect(mockFileSystem.deleteFile).toHaveBeenCalledWith('/storage/metadata/abc123.json')
     })
   })
 
@@ -209,9 +186,7 @@ describe('FileSystemStorage', () => {
       const packages = await FileSystemStorage.listPackages()
 
       expect(packages).toEqual([])
-      expect(mockFileSystem.listDirectory).toHaveBeenCalledWith(
-        '/storage/packages'
-      )
+      expect(mockFileSystem.listDirectory).toHaveBeenCalledWith('/storage/packages')
     })
 
     it('returns package hashes without extension', async () => {
@@ -229,26 +204,15 @@ describe('FileSystemStorage', () => {
 
   describe('clearAll', () => {
     it('deletes all packages', async () => {
-      mockFileSystem.listDirectory.mockResolvedValue([
-        'abc123.dat',
-        'def456.dat',
-      ])
+      mockFileSystem.listDirectory.mockResolvedValue(['abc123.dat', 'def456.dat'])
       mockFileSystem.deleteFile.mockResolvedValue(true)
 
       await FileSystemStorage.clearAll()
 
-      expect(mockFileSystem.deleteFile).toHaveBeenCalledWith(
-        '/storage/packages/abc123.dat'
-      )
-      expect(mockFileSystem.deleteFile).toHaveBeenCalledWith(
-        '/storage/metadata/abc123.json'
-      )
-      expect(mockFileSystem.deleteFile).toHaveBeenCalledWith(
-        '/storage/packages/def456.dat'
-      )
-      expect(mockFileSystem.deleteFile).toHaveBeenCalledWith(
-        '/storage/metadata/def456.json'
-      )
+      expect(mockFileSystem.deleteFile).toHaveBeenCalledWith('/storage/packages/abc123.dat')
+      expect(mockFileSystem.deleteFile).toHaveBeenCalledWith('/storage/metadata/abc123.json')
+      expect(mockFileSystem.deleteFile).toHaveBeenCalledWith('/storage/packages/def456.dat')
+      expect(mockFileSystem.deleteFile).toHaveBeenCalledWith('/storage/metadata/def456.json')
     })
 
     it('handles empty storage', async () => {
@@ -267,9 +231,7 @@ describe('FileSystemStorage', () => {
 
       const data = new Uint8Array([1, 2, 3])
 
-      await expect(
-        FileSystemStorage.setPackageData('abc123', data)
-      ).rejects.toThrow('Disk full')
+      await expect(FileSystemStorage.setPackageData('abc123', data)).rejects.toThrow('Disk full')
     })
   })
 
@@ -286,14 +248,8 @@ describe('FileSystemStorage', () => {
       ])
 
       expect(mockFileSystem.writeFile).toHaveBeenCalledTimes(2)
-      expect(mockFileSystem.writeFile).toHaveBeenCalledWith(
-        '/storage/packages/hash1.dat',
-        data1
-      )
-      expect(mockFileSystem.writeFile).toHaveBeenCalledWith(
-        '/storage/packages/hash2.dat',
-        data2
-      )
+      expect(mockFileSystem.writeFile).toHaveBeenCalledWith('/storage/packages/hash1.dat', data1)
+      expect(mockFileSystem.writeFile).toHaveBeenCalledWith('/storage/packages/hash2.dat', data2)
     })
 
     it('handles concurrent reads', async () => {
@@ -301,8 +257,12 @@ describe('FileSystemStorage', () => {
       const data2 = new Uint8Array([4, 5, 6])
 
       mockFileSystem.readFile.mockImplementation(async (path: string) => {
-        if (path.includes('hash1')) return data1
-        if (path.includes('hash2')) return data2
+        if (path.includes('hash1')) {
+          return data1
+        }
+        if (path.includes('hash2')) {
+          return data2
+        }
         return null
       })
 

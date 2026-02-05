@@ -95,82 +95,68 @@ describe('DownloadQueue Configuration', () => {
   })
 
   describe('maxRetries configuration', () => {
-    it(
-      'respects custom maxRetries setting',
-      async () => {
-        const queue = DownloadQueue.getInstance({ maxRetries: 2 })
+    it('respects custom maxRetries setting', async () => {
+      const queue = DownloadQueue.getInstance({ maxRetries: 2 })
 
-        ;(mockRemotePackage as any)._downloadInternal = jest
-          .fn()
-          .mockRejectedValue(new Error('Network error'))
+      ;(mockRemotePackage as any)._downloadInternal = jest
+        .fn()
+        .mockRejectedValue(new Error('Network error'))
 
-        await expect(queue.enqueue(mockRemotePackage)).rejects.toThrow()
+      await expect(queue.enqueue(mockRemotePackage)).rejects.toThrow()
 
-        expect((mockRemotePackage as any)._downloadInternal).toHaveBeenCalledTimes(
-          2
-        )
-      },
-      10000
-    )
+      expect((mockRemotePackage as any)._downloadInternal).toHaveBeenCalledTimes(2)
+    }, 10000)
   })
 
   describe('retry delay configuration', () => {
-    it(
-      'uses custom base retry delay',
-      async () => {
-        const queue = DownloadQueue.getInstance({
-          maxRetries: 2,
-          baseRetryDelay: 100, // Fast retries for testing
-        })
+    it('uses custom base retry delay', async () => {
+      const queue = DownloadQueue.getInstance({
+        maxRetries: 2,
+        baseRetryDelay: 100, // Fast retries for testing
+      })
 
-        let attempts = 0
-        ;(mockRemotePackage as any)._downloadInternal = jest.fn(async () => {
-          attempts++
-          if (attempts < 2) {
-            throw new Error('Temporary error')
-          }
-          return { packageHash: 'hash123' } as LocalPackage
-        })
+      let attempts = 0
+      ;(mockRemotePackage as any)._downloadInternal = jest.fn(async () => {
+        attempts++
+        if (attempts < 2) {
+          throw new Error('Temporary error')
+        }
+        return { packageHash: 'hash123' } as LocalPackage
+      })
 
-        const startTime = Date.now()
-        await queue.enqueue(mockRemotePackage)
-        const elapsed = Date.now() - startTime
+      const startTime = Date.now()
+      await queue.enqueue(mockRemotePackage)
+      const elapsed = Date.now() - startTime
 
-        // Should have one retry with ~200ms delay (100ms * 2^1)
-        expect(elapsed).toBeGreaterThan(150)
-        expect(elapsed).toBeLessThan(500)
-      },
-      10000
-    )
+      // Should have one retry with ~200ms delay (100ms * 2^1)
+      expect(elapsed).toBeGreaterThan(150)
+      expect(elapsed).toBeLessThan(500)
+    }, 10000)
 
-    it(
-      'respects maxRetryDelay cap',
-      async () => {
-        const queue = DownloadQueue.getInstance({
-          maxRetries: 10,
-          baseRetryDelay: 1000,
-          maxRetryDelay: 2000, // Cap at 2 seconds
-        })
+    it('respects maxRetryDelay cap', async () => {
+      const queue = DownloadQueue.getInstance({
+        maxRetries: 10,
+        baseRetryDelay: 1000,
+        maxRetryDelay: 2000, // Cap at 2 seconds
+      })
 
-        let attempts = 0
-        ;(mockRemotePackage as any)._downloadInternal = jest.fn(async () => {
-          attempts++
-          if (attempts < 5) {
-            throw new Error('Temporary error')
-          }
-          return { packageHash: 'hash123' } as LocalPackage
-        })
+      let attempts = 0
+      ;(mockRemotePackage as any)._downloadInternal = jest.fn(async () => {
+        attempts++
+        if (attempts < 5) {
+          throw new Error('Temporary error')
+        }
+        return { packageHash: 'hash123' } as LocalPackage
+      })
 
-        const startTime = Date.now()
-        await queue.enqueue(mockRemotePackage)
-        const elapsed = Date.now() - startTime
+      const startTime = Date.now()
+      await queue.enqueue(mockRemotePackage)
+      const elapsed = Date.now() - startTime
 
-        // With exponential backoff and max cap, should not take too long
-        // 4 retries: 2s + 2s + 2s + 2s = 8s max
-        expect(elapsed).toBeLessThan(10000)
-      },
-      15000
-    )
+      // With exponential backoff and max cap, should not take too long
+      // 4 retries: 2s + 2s + 2s + 2s = 8s max
+      expect(elapsed).toBeLessThan(10000)
+    }, 15000)
   })
 
   describe('debug logging', () => {
@@ -186,9 +172,8 @@ describe('DownloadQueue Configuration', () => {
       await queue.enqueue(mockRemotePackage)
 
       const debugLogs = consoleLogSpy.mock.calls.filter(
-        (call) =>
-          call[0]?.toString().includes('[DownloadQueue]') &&
-          call[0]?.toString().includes('Attempt')
+        call =>
+          call[0]?.toString().includes('[DownloadQueue]') && call[0]?.toString().includes('Attempt')
       )
 
       expect(debugLogs.length).toBeGreaterThan(0)
@@ -208,9 +193,8 @@ describe('DownloadQueue Configuration', () => {
       await queue.enqueue(mockRemotePackage)
 
       const debugLogs = consoleLogSpy.mock.calls.filter(
-        (call) =>
-          call[0]?.toString().includes('[DownloadQueue]') &&
-          call[0]?.toString().includes('Attempt')
+        call =>
+          call[0]?.toString().includes('[DownloadQueue]') && call[0]?.toString().includes('Attempt')
       )
 
       expect(debugLogs.length).toBe(0)

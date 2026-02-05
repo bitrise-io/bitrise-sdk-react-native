@@ -40,6 +40,8 @@ export class DownloadQueue {
   private processing = false
   private config: Required<QueueConfig>
   private statistics = new QueueStatisticsTracker()
+  /** Map of package hash to pending promise for download deduplication */
+  private pendingDownloads = new Map<string, Promise<LocalPackage>>()
 
   private constructor(config?: QueueConfig) {
     this.config = mergeQueueConfig(config)
@@ -77,16 +79,30 @@ export class DownloadQueue {
   /**
    * Enqueue a download request
    * Returns promise that resolves when download completes
+   * Deduplicates requests for the same package hash
    *
    * @param remotePackage Package to download
-   * @param progressCallback Optional progress callback
+   * @param progressCallback Optional progress callback (not called for deduplicated requests)
    * @returns Promise that resolves to LocalPackage
    */
-  async enqueue(
+  enqueue(
     remotePackage: RemotePackage,
     progressCallback?: (progress: DownloadProgress) => void
   ): Promise<LocalPackage> {
-    return new Promise((resolve, reject) => {
+    const packageHash = remotePackage.packageHash
+
+    // Check for existing pending download of same package (deduplication)
+    const existingPromise = this.pendingDownloads.get(packageHash)
+    if (existingPromise) {
+      if (this.config.debug) {
+        console.log(`[DownloadQueue] Reusing existing download for ${packageHash}`)
+      }
+      // Return existing promise - caller won't get progress callbacks for deduplicated download
+      return existingPromise
+    }
+
+    // Create new download promise
+    const downloadPromise = new Promise<LocalPackage>((resolve, reject) => {
       const item: QueueItem = {
         id: this.generateId(),
         remotePackage,
@@ -107,6 +123,22 @@ export class DownloadQueue {
         this.processQueue()
       }
     })
+
+    // Track pending download for deduplication
+    this.pendingDownloads.set(packageHash, downloadPromise)
+
+    // Clean up tracking when complete (success or failure)
+    // The .catch() prevents unhandled rejection from the .finally() chain
+    downloadPromise
+      .finally(() => {
+        this.pendingDownloads.delete(packageHash)
+      })
+      .catch(() => {
+        // Rejection is already handled by the caller; this just prevents
+        // the finally chain from creating an unhandled rejection
+      })
+
+    return downloadPromise
   }
 
   /**

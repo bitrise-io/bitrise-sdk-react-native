@@ -1,7 +1,17 @@
 import { MetricsClient, MetricEvent } from '../MetricsClient'
+import { PersistentStorage } from '../../utils/storage'
 
 // Mock fetch
 global.fetch = jest.fn()
+
+// Mock PersistentStorage
+jest.mock('../../utils/storage', () => ({
+  PersistentStorage: {
+    getItem: jest.fn().mockResolvedValue([]),
+    setItem: jest.fn().mockResolvedValue(undefined),
+    removeItem: jest.fn().mockResolvedValue(undefined),
+  },
+}))
 
 // Mock timers
 jest.useFakeTimers()
@@ -451,6 +461,129 @@ describe('MetricsClient', () => {
       expect(event).not.toHaveProperty('name')
       expect(event).not.toHaveProperty('phone')
       expect(event).not.toHaveProperty('userId')
+    })
+  })
+
+  describe('queue persistence', () => {
+    beforeEach(() => {
+      jest.clearAllMocks()
+      ;(PersistentStorage.getItem as jest.Mock).mockResolvedValue([])
+    })
+
+    it('should persist queue after every 5 events', async () => {
+      const client = MetricsClient.initialize(
+        'https://api.bitrise.io',
+        'test-deployment-key',
+        'test-client-id',
+        '1.0.0'
+      )
+      client.setBatchSize(100) // Prevent auto-flush
+
+      // Report 4 events - should not persist yet
+      for (let i = 0; i < 4; i++) {
+        client.reportEvent(MetricEvent.UPDATE_CHECK)
+      }
+
+      // Allow async operations to complete
+      await Promise.resolve()
+
+      expect(PersistentStorage.setItem).not.toHaveBeenCalled()
+
+      // Report 5th event - should trigger persist
+      client.reportEvent(MetricEvent.UPDATE_CHECK)
+
+      // Allow async operations to complete
+      await Promise.resolve()
+
+      expect(PersistentStorage.setItem).toHaveBeenCalledWith(
+        '@bitrise/codepush/metricsQueue',
+        expect.arrayContaining([expect.objectContaining({ event: MetricEvent.UPDATE_CHECK })])
+      )
+    })
+
+    it('should recover persisted queue on initialization', async () => {
+      const persistedEvents = [
+        {
+          event: MetricEvent.DOWNLOAD_START,
+          clientId: 'old-client',
+          deploymentKey: 'old-key',
+          appVersion: '0.9.0',
+          timestamp: Date.now() - 60000,
+        },
+      ]
+      ;(PersistentStorage.getItem as jest.Mock).mockResolvedValue(persistedEvents)
+
+      const client = MetricsClient.initialize(
+        'https://api.bitrise.io',
+        'test-deployment-key',
+        'test-client-id',
+        '1.0.0'
+      )
+
+      // Wait for async recovery
+      await Promise.resolve()
+      await Promise.resolve()
+
+      // Queue should include recovered events
+      expect(client.getQueueSize()).toBeGreaterThanOrEqual(1)
+
+      // Persisted queue should be cleared after recovery
+      expect(PersistentStorage.removeItem).toHaveBeenCalledWith('@bitrise/codepush/metricsQueue')
+    })
+
+    it('should clear persisted queue after successful flush', async () => {
+      const client = MetricsClient.initialize(
+        'https://api.bitrise.io',
+        'test-deployment-key',
+        'test-client-id',
+        '1.0.0'
+      )
+      client.setBatchSize(1)
+
+      client.reportEvent(MetricEvent.UPDATE_CHECK)
+
+      // Trigger flush
+      await client.flush()
+
+      expect(PersistentStorage.removeItem).toHaveBeenCalledWith('@bitrise/codepush/metricsQueue')
+    })
+
+    it('should allow manual persist via persistQueue', async () => {
+      const client = MetricsClient.initialize(
+        'https://api.bitrise.io',
+        'test-deployment-key',
+        'test-client-id',
+        '1.0.0'
+      )
+      client.setBatchSize(100) // Prevent auto-flush
+
+      client.reportEvent(MetricEvent.UPDATE_CHECK)
+      client.reportEvent(MetricEvent.DOWNLOAD_START)
+
+      await client.persistQueue()
+
+      expect(PersistentStorage.setItem).toHaveBeenCalledWith(
+        '@bitrise/codepush/metricsQueue',
+        expect.arrayContaining([
+          expect.objectContaining({ event: MetricEvent.UPDATE_CHECK }),
+          expect.objectContaining({ event: MetricEvent.DOWNLOAD_START }),
+        ])
+      )
+    })
+
+    it('should not persist empty queue', async () => {
+      const client = MetricsClient.initialize(
+        'https://api.bitrise.io',
+        'test-deployment-key',
+        'test-client-id',
+        '1.0.0'
+      )
+
+      await client.persistQueue()
+
+      expect(PersistentStorage.setItem).not.toHaveBeenCalled()
+      // Should clear any existing persisted queue
+      expect(PersistentStorage.removeItem).toHaveBeenCalled()
     })
   })
 })

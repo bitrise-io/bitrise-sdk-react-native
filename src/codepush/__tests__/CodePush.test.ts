@@ -1,7 +1,7 @@
 import { CodePush } from '../CodePush'
 import { BitriseClient } from '../../network/BitriseClient'
 import { PackageStorage } from '../../storage/PackageStorage'
-import { ConfigurationError, UpdateError } from '../../types/errors'
+import { ConfigurationError, UpdateError, TimeoutError } from '../../types/errors'
 import { UpdateState, SyncStatus } from '../../types/enums'
 import type { BitriseConfig } from '../../types/config'
 import type { RemotePackage, Package } from '../../types/package'
@@ -206,6 +206,14 @@ describe('CodePush', () => {
       const result = await codePush.getUpdateMetadata()
 
       expect(result).toEqual(mockPackage)
+    })
+
+    it('should return null for invalid UpdateState value', async () => {
+      const invalidState = 999 as UpdateState
+
+      const result = await codePush.getUpdateMetadata(invalidState)
+
+      expect(result).toBeNull()
     })
   })
 
@@ -482,6 +490,50 @@ describe('CodePush', () => {
         const codePushWithoutKey = new CodePush(configWithoutKey)
 
         await expect(codePushWithoutKey.sync()).rejects.toThrow(ConfigurationError)
+      })
+
+      it('should throw TimeoutError when sync exceeds timeout', async () => {
+        // Make sync hang indefinitely
+        ;(BitriseClient.prototype.checkForUpdate as jest.Mock).mockImplementation(
+          () => new Promise(() => {}) // Never resolves
+        )
+
+        await expect(codePush.sync({ syncTimeoutMs: 50 })).rejects.toThrow(TimeoutError)
+      })
+
+      it('should include timeout details in TimeoutError', async () => {
+        ;(BitriseClient.prototype.checkForUpdate as jest.Mock).mockImplementation(
+          () => new Promise(() => {})
+        )
+
+        try {
+          await codePush.sync({ syncTimeoutMs: 50 })
+          fail('Expected TimeoutError to be thrown')
+        } catch (error) {
+          expect(error).toBeInstanceOf(TimeoutError)
+          expect((error as TimeoutError).message).toContain('50ms')
+        }
+      })
+
+      it('should clear isSyncing flag when timeout occurs', async () => {
+        ;(BitriseClient.prototype.checkForUpdate as jest.Mock).mockImplementation(
+          () => new Promise(() => {})
+        )
+
+        await expect(codePush.sync({ syncTimeoutMs: 50 })).rejects.toThrow(TimeoutError)
+
+        // Verify mutex is cleared - next sync should not return SYNC_IN_PROGRESS
+        ;(BitriseClient.prototype.checkForUpdate as jest.Mock).mockResolvedValue(null)
+        const status = await codePush.sync({ syncTimeoutMs: 0 }) // Disable timeout
+        expect(status).toBe(0) // SyncStatus.UP_TO_DATE
+      })
+
+      it('should skip timeout wrapper when syncTimeoutMs is 0', async () => {
+        ;(BitriseClient.prototype.checkForUpdate as jest.Mock).mockResolvedValue(null)
+
+        const status = await codePush.sync({ syncTimeoutMs: 0 })
+
+        expect(status).toBe(0) // SyncStatus.UP_TO_DATE
       })
     })
 
@@ -1124,6 +1176,53 @@ describe('CodePush', () => {
       await new Promise(resolve => setTimeout(resolve, 10))
 
       expect(PackageStorage.setFailedUpdates).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('toJSON', () => {
+    it('should return safe serialization without sensitive data', () => {
+      const json = codePush.toJSON()
+
+      expect(json).toEqual({
+        serverUrl: 'https://api.bitrise.io',
+        configured: false, // client not created until sync is called
+        notifyAppReadyCalled: false,
+        isSyncing: false,
+      })
+    })
+
+    it('should show configured true after client is initialized', async () => {
+      ;(BitriseClient.prototype.checkForUpdate as jest.Mock).mockResolvedValue(null)
+      await codePush.sync()
+
+      const json = codePush.toJSON() as { configured: boolean }
+      expect(json.configured).toBe(true)
+    })
+
+    it('should not include deployment key in JSON output', () => {
+      const json = codePush.toJSON()
+
+      expect(json).not.toHaveProperty('deploymentKey')
+      expect(json).not.toHaveProperty('apiToken')
+      expect(json).not.toHaveProperty('bitriseConfig')
+    })
+
+    it('should reflect notifyAppReadyCalled state', () => {
+      ;(PackageStorage.getCurrentPackage as jest.Mock).mockResolvedValue(null)
+      codePush.notifyAppReady()
+
+      const json = codePush.toJSON()
+
+      expect(json).toHaveProperty('notifyAppReadyCalled', true)
+    })
+
+    it('should be safe to JSON.stringify', () => {
+      const result = JSON.stringify(codePush)
+
+      expect(result).toContain('serverUrl')
+      expect(result).toContain('configured')
+      expect(result).not.toContain('test-deployment-key')
+      expect(result).not.toContain('test-token')
     })
   })
 })

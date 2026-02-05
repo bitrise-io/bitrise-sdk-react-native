@@ -61,26 +61,22 @@ describe('Queue Statistics', () => {
       expect(stats.totalBytesDownloaded).toBe(1024)
     })
 
-    it(
-      'tracks failed downloads',
-      async () => {
-        const queue = DownloadQueue.getInstance({ maxRetries: 1 })
+    it('tracks failed downloads', async () => {
+      const queue = DownloadQueue.getInstance({ maxRetries: 1 })
 
-        ;(mockRemotePackage as any)._downloadInternal = jest
-          .fn()
-          .mockRejectedValue(new Error('Network error'))
+      ;(mockRemotePackage as any)._downloadInternal = jest
+        .fn()
+        .mockRejectedValue(new Error('Network error'))
 
-        await expect(queue.enqueue(mockRemotePackage)).rejects.toThrow()
+      await expect(queue.enqueue(mockRemotePackage)).rejects.toThrow()
 
-        const stats = queue.getStatistics()
+      const stats = queue.getStatistics()
 
-        expect(stats.totalDownloads).toBe(1)
-        expect(stats.successfulDownloads).toBe(0)
-        expect(stats.failedDownloads).toBe(1)
-        expect(stats.successRate).toBe(0)
-      },
-      10000
-    )
+      expect(stats.totalDownloads).toBe(1)
+      expect(stats.successfulDownloads).toBe(0)
+      expect(stats.failedDownloads).toBe(1)
+      expect(stats.successRate).toBe(0)
+    }, 10000)
 
     it('tracks cancelled downloads', async () => {
       const queue = DownloadQueue.getInstance()
@@ -88,7 +84,7 @@ describe('Queue Statistics', () => {
       let downloadStarted = false
       ;(mockRemotePackage as any)._downloadInternal = jest.fn(async () => {
         downloadStarted = true
-        await new Promise((resolve) => setTimeout(resolve, 100))
+        await new Promise(resolve => setTimeout(resolve, 100))
         return { packageHash: 'hash123' } as LocalPackage
       })
 
@@ -101,11 +97,11 @@ describe('Queue Statistics', () => {
       const promise2 = queue.enqueue(pkg2 as any)
 
       // Attach rejection handler immediately to prevent unhandled promise rejection
-      const promise2Rejection = promise2.catch((e) => e)
+      const promise2Rejection = promise2.catch(e => e)
 
       // Wait for first download to start
       while (!downloadStarted) {
-        await new Promise((resolve) => setTimeout(resolve, 10))
+        await new Promise(resolve => setTimeout(resolve, 10))
       }
 
       // Cancel second download
@@ -137,9 +133,7 @@ describe('Queue Statistics', () => {
       ;(pkg1 as any)._downloadInternal = jest
         .fn()
         .mockResolvedValue({ packageHash: 'hash1' } as LocalPackage)
-      ;(pkg2 as any)._downloadInternal = jest
-        .fn()
-        .mockRejectedValue(new Error('Failed'))
+      ;(pkg2 as any)._downloadInternal = jest.fn().mockRejectedValue(new Error('Failed'))
       ;(pkg3 as any)._downloadInternal = jest
         .fn()
         .mockResolvedValue({ packageHash: 'hash3' } as LocalPackage)
@@ -162,7 +156,7 @@ describe('Queue Statistics', () => {
       let download1Started = false
       ;(mockRemotePackage as any)._downloadInternal = jest.fn(async () => {
         download1Started = true
-        await new Promise((resolve) => setTimeout(resolve, 100))
+        await new Promise(resolve => setTimeout(resolve, 100))
         return { packageHash: 'hash123' } as LocalPackage
       })
 
@@ -182,7 +176,7 @@ describe('Queue Statistics', () => {
 
       // Wait for first download to start
       while (!download1Started) {
-        await new Promise((resolve) => setTimeout(resolve, 10))
+        await new Promise(resolve => setTimeout(resolve, 10))
       }
 
       const stats1 = queue.getStatistics()
@@ -199,7 +193,7 @@ describe('Queue Statistics', () => {
       const queue = DownloadQueue.getInstance()
 
       ;(mockRemotePackage as any)._downloadInternal = jest.fn(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 50))
+        await new Promise(resolve => setTimeout(resolve, 50))
         return { packageHash: 'hash123' } as LocalPackage
       })
 

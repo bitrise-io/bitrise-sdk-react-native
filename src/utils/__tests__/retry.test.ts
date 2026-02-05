@@ -1,6 +1,65 @@
-import { retryWithBackoff } from '../retry'
+import { retryWithBackoff, calculateDelayWithJitter } from '../retry'
 
 describe('retry utilities', () => {
+  describe('calculateDelayWithJitter', () => {
+    it('returns exponential delay without jitter when jitter is false', () => {
+      const delay = calculateDelayWithJitter(1000, 0, false, 0.3)
+      expect(delay).toBe(1000) // 1000 * 2^0 = 1000
+
+      const delay2 = calculateDelayWithJitter(1000, 1, false, 0.3)
+      expect(delay2).toBe(2000) // 1000 * 2^1 = 2000
+
+      const delay3 = calculateDelayWithJitter(1000, 2, false, 0.3)
+      expect(delay3).toBe(4000) // 1000 * 2^2 = 4000
+    })
+
+    it('returns delay within jitter range when jitter is true', () => {
+      // Run multiple times to test randomness
+      for (let i = 0; i < 100; i++) {
+        const baseExponential = 1000 // 1000 * 2^0
+        const delay = calculateDelayWithJitter(1000, 0, true, 0.3)
+
+        // Should be within ±30% of base: 700 to 1300
+        expect(delay).toBeGreaterThanOrEqual(baseExponential * 0.7)
+        expect(delay).toBeLessThanOrEqual(baseExponential * 1.3)
+      }
+    })
+
+    it('applies jitter to exponential backoff correctly', () => {
+      for (let i = 0; i < 100; i++) {
+        const baseExponential = 2000 // 1000 * 2^1
+        const delay = calculateDelayWithJitter(1000, 1, true, 0.3)
+
+        // Should be within ±30% of 2000: 1400 to 2600
+        expect(delay).toBeGreaterThanOrEqual(baseExponential * 0.7)
+        expect(delay).toBeLessThanOrEqual(baseExponential * 1.3)
+      }
+    })
+
+    it('respects custom jitter factor', () => {
+      for (let i = 0; i < 100; i++) {
+        const baseExponential = 1000
+        const delay = calculateDelayWithJitter(1000, 0, true, 0.5)
+
+        // Should be within ±50% of base: 500 to 1500
+        expect(delay).toBeGreaterThanOrEqual(baseExponential * 0.5)
+        expect(delay).toBeLessThanOrEqual(baseExponential * 1.5)
+      }
+    })
+
+    it('never returns negative delay', () => {
+      for (let i = 0; i < 100; i++) {
+        const delay = calculateDelayWithJitter(100, 0, true, 0.99)
+        expect(delay).toBeGreaterThanOrEqual(0)
+      }
+    })
+
+    it('handles zero base delay', () => {
+      const delay = calculateDelayWithJitter(0, 0, true, 0.3)
+      expect(delay).toBe(0)
+    })
+  })
+
   beforeEach(() => {
     jest.clearAllTimers()
   })
@@ -59,9 +118,9 @@ describe('retry utilities', () => {
 
       jest.useFakeTimers()
 
-      const promise = retryWithBackoff(fn, { baseDelay: 1000 })
+      const promise = retryWithBackoff(fn, { baseDelay: 1000, jitter: false })
 
-      // Fast-forward through delays
+      // Fast-forward through delays (exact delays when jitter is disabled)
       await jest.advanceTimersByTimeAsync(1000) // First retry: 1s
       await jest.advanceTimersByTimeAsync(2000) // Second retry: 2s
 
@@ -136,9 +195,9 @@ describe('retry utilities', () => {
 
       jest.useFakeTimers()
 
-      const promise = retryWithBackoff(fn, { baseDelay: 500 })
+      const promise = retryWithBackoff(fn, { baseDelay: 500, jitter: false })
 
-      // Should delay 500ms (baseDelay * 2^0)
+      // Should delay exactly 500ms (baseDelay * 2^0) when jitter is disabled
       await jest.advanceTimersByTimeAsync(500)
 
       jest.useRealTimers()
@@ -189,6 +248,66 @@ describe('retry utilities', () => {
       await expect(retryWithBackoff(fn, { maxRetries: 1, baseDelay: 10 })).rejects.toThrow('Fail')
 
       expect(fn).toHaveBeenCalledTimes(1)
+    })
+
+    describe('jitter options', () => {
+      it('applies jitter by default', async () => {
+        const fn = jest
+          .fn()
+          .mockRejectedValueOnce(new Error('Fail'))
+          .mockResolvedValueOnce('success')
+
+        // With jitter enabled (default), delays should vary
+        // Just verify it completes successfully
+        const result = await retryWithBackoff(fn, { baseDelay: 10 })
+        expect(result).toBe('success')
+      })
+
+      it('can disable jitter explicitly', async () => {
+        const fn = jest
+          .fn()
+          .mockRejectedValueOnce(new Error('Fail'))
+          .mockResolvedValueOnce('success')
+
+        jest.useFakeTimers()
+
+        const promise = retryWithBackoff(fn, { baseDelay: 1000, jitter: false })
+
+        // With jitter disabled, delay should be exactly 1000ms
+        await jest.advanceTimersByTimeAsync(1000)
+
+        jest.useRealTimers()
+        const result = await promise
+
+        expect(result).toBe('success')
+      })
+
+      it('respects custom jitterFactor', async () => {
+        const fn = jest
+          .fn()
+          .mockRejectedValueOnce(new Error('Fail'))
+          .mockResolvedValueOnce('success')
+
+        // Just verify it completes successfully with custom jitterFactor
+        const result = await retryWithBackoff(fn, {
+          baseDelay: 10,
+          jitter: true,
+          jitterFactor: 0.5,
+        })
+
+        expect(result).toBe('success')
+      })
+
+      it('uses default jitterFactor of 0.3', async () => {
+        const fn = jest
+          .fn()
+          .mockRejectedValueOnce(new Error('Fail'))
+          .mockResolvedValueOnce('success')
+
+        // Just verify it completes - default jitterFactor is 0.3
+        const result = await retryWithBackoff(fn, { baseDelay: 10, jitter: true })
+        expect(result).toBe('success')
+      })
     })
   })
 })

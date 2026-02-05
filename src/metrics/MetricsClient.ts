@@ -1,3 +1,10 @@
+import { PersistentStorage } from '../utils/storage'
+
+/**
+ * Storage key for persisted metrics queue
+ */
+const METRICS_QUEUE_KEY = '@bitrise/codepush/metricsQueue'
+
 /**
  * Metric event types reported to the Bitrise server
  */
@@ -58,6 +65,11 @@ export class MetricsClient {
   private flushIntervalId: NodeJS.Timeout | null = null
   private isFlushing: boolean = false
 
+  /** Counter for persistence batching */
+  private eventsSinceLastPersist: number = 0
+  /** Interval for persisting queue (every N events) */
+  private persistInterval: number = 5
+
   private constructor(
     private serverUrl: string,
     private deploymentKey: string,
@@ -66,6 +78,10 @@ export class MetricsClient {
   ) {
     // Start periodic flush
     this.startPeriodicFlush()
+    // Recover any persisted events from previous session
+    this.recoverQueue().catch(error => {
+      console.warn('[CodePush] Failed to recover metrics queue:', error)
+    })
   }
 
   /**
@@ -145,6 +161,13 @@ export class MetricsClient {
     }
 
     this.queue.push(payload)
+    this.eventsSinceLastPersist++
+
+    // Persist queue periodically to survive app termination
+    if (this.eventsSinceLastPersist >= this.persistInterval) {
+      this.eventsSinceLastPersist = 0
+      this.persistQueue().catch(() => {})
+    }
 
     // Flush if queue is full
     if (this.queue.length >= this.batchSize) {
@@ -182,6 +205,9 @@ export class MetricsClient {
         if (this.queue.length < 100) {
           this.queue.unshift(...batch)
         }
+      } else {
+        // Clear persisted queue after successful flush
+        await this.clearPersistedQueue()
       }
     } catch (error) {
       console.warn('[CodePush] Metrics report error:', error)
@@ -268,5 +294,53 @@ export class MetricsClient {
     // Restart timer with new interval
     this.stopPeriodicFlush()
     this.startPeriodicFlush()
+  }
+
+  /**
+   * Recover queued metrics from persistent storage
+   * Called during initialization to restore events from previous session
+   */
+  private async recoverQueue(): Promise<void> {
+    try {
+      const savedQueue = await PersistentStorage.getItem<MetricPayload[]>(METRICS_QUEUE_KEY, [])
+      if (savedQueue && savedQueue.length > 0) {
+        // Prepend recovered events to current queue
+        this.queue.unshift(...savedQueue)
+        // Clear persisted queue after recovery
+        await PersistentStorage.removeItem(METRICS_QUEUE_KEY)
+      }
+    } catch (error) {
+      console.warn('[CodePush] Failed to recover metrics queue:', error)
+    }
+  }
+
+  /**
+   * Persist queue to storage for recovery after app termination
+   * Should be called before app goes to background or terminates
+   */
+  async persistQueue(): Promise<void> {
+    if (this.queue.length === 0) {
+      // Clear any existing persisted queue
+      await PersistentStorage.removeItem(METRICS_QUEUE_KEY).catch(() => {})
+      return
+    }
+
+    try {
+      await PersistentStorage.setItem(METRICS_QUEUE_KEY, this.queue)
+    } catch (error) {
+      console.warn('[CodePush] Failed to persist metrics queue:', error)
+    }
+  }
+
+  /**
+   * Clear persisted queue from storage
+   * Called after successful flush
+   */
+  private async clearPersistedQueue(): Promise<void> {
+    try {
+      await PersistentStorage.removeItem(METRICS_QUEUE_KEY)
+    } catch {
+      // Ignore errors when clearing
+    }
   }
 }

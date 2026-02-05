@@ -14,6 +14,7 @@ describe('DownloadQueue', () => {
     ;(queue as any).currentDownload = null
     ;(queue as any).status = QueueStatus.IDLE
     ;(queue as any).processing = false
+    ;(queue as any).pendingDownloads = new Map()
 
     mockRemotePackage = {
       appVersion: '1.0.0',
@@ -37,6 +38,7 @@ describe('DownloadQueue', () => {
     ;(queue as any).currentDownload = null
     ;(queue as any).status = QueueStatus.IDLE
     ;(queue as any).processing = false
+    ;(queue as any).pendingDownloads = new Map()
     ;(queue as any).eventEmitter.removeAllListeners()
   })
 
@@ -52,9 +54,7 @@ describe('DownloadQueue', () => {
   describe('enqueue', () => {
     it('enqueues download request', async () => {
       const mockLocalPackage = { packageHash: 'hash123' } as LocalPackage
-      ;(mockRemotePackage as any)._downloadInternal = jest
-        .fn()
-        .mockResolvedValue(mockLocalPackage)
+      ;(mockRemotePackage as any)._downloadInternal = jest.fn().mockResolvedValue(mockLocalPackage)
 
       const progressCallback = jest.fn()
       const promise = queue.enqueue(mockRemotePackage, progressCallback)
@@ -68,9 +68,7 @@ describe('DownloadQueue', () => {
 
     it('emits ITEM_ADDED event', async () => {
       const mockLocalPackage = { packageHash: 'hash123' } as LocalPackage
-      ;(mockRemotePackage as any)._downloadInternal = jest
-        .fn()
-        .mockResolvedValue(mockLocalPackage)
+      ;(mockRemotePackage as any)._downloadInternal = jest.fn().mockResolvedValue(mockLocalPackage)
 
       const eventCallback = jest.fn()
       queue.on(QueueEvent.ITEM_ADDED, eventCallback)
@@ -90,9 +88,7 @@ describe('DownloadQueue', () => {
 
     it('processes queue automatically when idle', async () => {
       const mockLocalPackage = { packageHash: 'hash123' } as LocalPackage
-      ;(mockRemotePackage as any)._downloadInternal = jest
-        .fn()
-        .mockResolvedValue(mockLocalPackage)
+      ;(mockRemotePackage as any)._downloadInternal = jest.fn().mockResolvedValue(mockLocalPackage)
 
       const result = await queue.enqueue(mockRemotePackage)
 
@@ -122,6 +118,109 @@ describe('DownloadQueue', () => {
       expect(result1).toBe(mockLocalPackage1)
       expect(result2).toBe(mockLocalPackage2)
     })
+
+    describe('deduplication', () => {
+      it('reuses existing download for same package hash', async () => {
+        const mockLocalPackage = { packageHash: 'hash123' } as LocalPackage
+        ;(mockRemotePackage as any)._downloadInternal = jest.fn().mockImplementation(
+          () =>
+            new Promise(resolve => {
+              setTimeout(() => resolve(mockLocalPackage), 50)
+            })
+        )
+
+        // Enqueue same package twice concurrently
+        const promise1 = queue.enqueue(mockRemotePackage)
+        const promise2 = queue.enqueue(mockRemotePackage)
+
+        // Both should get the same promise
+        expect(promise1).toBe(promise2)
+
+        const [result1, result2] = await Promise.all([promise1, promise2])
+
+        expect(result1).toBe(mockLocalPackage)
+        expect(result2).toBe(mockLocalPackage)
+        // Should only download once
+        expect((mockRemotePackage as any)._downloadInternal).toHaveBeenCalledTimes(1)
+      })
+
+      it('allows new download after previous completes', async () => {
+        const mockLocalPackage1 = { packageHash: 'hash123', version: 1 } as unknown as LocalPackage
+        const mockLocalPackage2 = { packageHash: 'hash123', version: 2 } as unknown as LocalPackage
+        ;(mockRemotePackage as any)._downloadInternal = jest
+          .fn()
+          .mockResolvedValueOnce(mockLocalPackage1)
+          .mockResolvedValueOnce(mockLocalPackage2)
+
+        // First download
+        const result1 = await queue.enqueue(mockRemotePackage)
+        expect(result1).toBe(mockLocalPackage1)
+
+        // Second download (should be a new download, not deduplicated)
+        const result2 = await queue.enqueue(mockRemotePackage)
+        expect(result2).toBe(mockLocalPackage2)
+
+        expect((mockRemotePackage as any)._downloadInternal).toHaveBeenCalledTimes(2)
+      })
+
+      it('allows new download after previous fails', async () => {
+        // Reduce retry delays for faster test
+        queue.updateConfig({ retryDelay: 10, maxRetryDelay: 50 })
+
+        const mockLocalPackage = { packageHash: 'hash123' } as LocalPackage
+        // Create a mock that fails all retries (3 attempts) then succeeds
+        ;(mockRemotePackage as any)._downloadInternal = jest
+          .fn()
+          .mockRejectedValueOnce(new Error('First download failed'))
+          .mockRejectedValueOnce(new Error('Retry 1 failed'))
+          .mockRejectedValueOnce(new Error('Retry 2 failed'))
+          .mockResolvedValueOnce(mockLocalPackage)
+
+        // First download fails after exhausting retries
+        await expect(queue.enqueue(mockRemotePackage)).rejects.toThrow()
+
+        // Second download should work (not deduplicated to failed download)
+        const result = await queue.enqueue(mockRemotePackage)
+        expect(result).toBe(mockLocalPackage)
+
+        // 3 retries for first download + 1 for successful second download = 4 calls
+        expect((mockRemotePackage as any)._downloadInternal).toHaveBeenCalledTimes(4)
+      }, 10000)
+
+      it('does not deduplicate different package hashes', async () => {
+        const mockLocalPackage1 = { packageHash: 'hash1' } as LocalPackage
+        const mockLocalPackage2 = { packageHash: 'hash2' } as LocalPackage
+
+        const mockRemotePackage1 = { ...mockRemotePackage, packageHash: 'hash1' }
+        const mockRemotePackage2 = { ...mockRemotePackage, packageHash: 'hash2' }
+
+        ;(mockRemotePackage1 as any)._downloadInternal = jest.fn().mockImplementation(
+          () =>
+            new Promise(resolve => {
+              setTimeout(() => resolve(mockLocalPackage1), 50)
+            })
+        )
+        ;(mockRemotePackage2 as any)._downloadInternal = jest.fn().mockImplementation(
+          () =>
+            new Promise(resolve => {
+              setTimeout(() => resolve(mockLocalPackage2), 50)
+            })
+        )
+
+        const promise1 = queue.enqueue(mockRemotePackage1 as any)
+        const promise2 = queue.enqueue(mockRemotePackage2 as any)
+
+        // Different packages should not be deduplicated
+        expect(promise1).not.toBe(promise2)
+
+        const [result1, result2] = await Promise.all([promise1, promise2])
+
+        expect(result1).toBe(mockLocalPackage1)
+        expect(result2).toBe(mockLocalPackage2)
+        expect((mockRemotePackage1 as any)._downloadInternal).toHaveBeenCalledTimes(1)
+        expect((mockRemotePackage2 as any)._downloadInternal).toHaveBeenCalledTimes(1)
+      })
+    })
   })
 
   describe('queue processing', () => {
@@ -135,7 +234,7 @@ describe('DownloadQueue', () => {
 
       ;(mockRemotePackage1 as any)._downloadInternal = jest.fn(async () => {
         downloadOrder.push('hash1')
-        await new Promise((resolve) => setTimeout(resolve, 50))
+        await new Promise(resolve => setTimeout(resolve, 50))
         return mockLocalPackage1
       })
       ;(mockRemotePackage2 as any)._downloadInternal = jest.fn(async () => {
@@ -153,9 +252,7 @@ describe('DownloadQueue', () => {
 
     it('emits DOWNLOAD_STARTED event', async () => {
       const mockLocalPackage = { packageHash: 'hash123' } as LocalPackage
-      ;(mockRemotePackage as any)._downloadInternal = jest
-        .fn()
-        .mockResolvedValue(mockLocalPackage)
+      ;(mockRemotePackage as any)._downloadInternal = jest.fn().mockResolvedValue(mockLocalPackage)
 
       const eventCallback = jest.fn()
       queue.on(QueueEvent.DOWNLOAD_STARTED, eventCallback)
@@ -172,9 +269,7 @@ describe('DownloadQueue', () => {
 
     it('emits DOWNLOAD_COMPLETED event', async () => {
       const mockLocalPackage = { packageHash: 'hash123' } as LocalPackage
-      ;(mockRemotePackage as any)._downloadInternal = jest
-        .fn()
-        .mockResolvedValue(mockLocalPackage)
+      ;(mockRemotePackage as any)._downloadInternal = jest.fn().mockResolvedValue(mockLocalPackage)
 
       const eventCallback = jest.fn()
       queue.on(QueueEvent.DOWNLOAD_COMPLETED, eventCallback)
@@ -187,31 +282,21 @@ describe('DownloadQueue', () => {
       })
     })
 
-    it(
-      'emits DOWNLOAD_FAILED event on error',
-      async () => {
-        const error = new Error('Download failed')
-        ;(mockRemotePackage as any)._downloadInternal = jest
-          .fn()
-          .mockRejectedValue(error)
+    it('emits DOWNLOAD_FAILED event on error', async () => {
+      const error = new Error('Download failed')
+      ;(mockRemotePackage as any)._downloadInternal = jest.fn().mockRejectedValue(error)
 
-        const eventCallback = jest.fn()
-        queue.on(QueueEvent.DOWNLOAD_FAILED, eventCallback)
+      const eventCallback = jest.fn()
+      queue.on(QueueEvent.DOWNLOAD_FAILED, eventCallback)
 
-        await expect(queue.enqueue(mockRemotePackage)).rejects.toThrow(
-          'Download failed'
-        )
+      await expect(queue.enqueue(mockRemotePackage)).rejects.toThrow('Download failed')
 
-        expect(eventCallback).toHaveBeenCalled()
-      },
-      10000
-    )
+      expect(eventCallback).toHaveBeenCalled()
+    }, 10000)
 
     it('emits QUEUE_EMPTIED event when queue is empty', async () => {
       const mockLocalPackage = { packageHash: 'hash123' } as LocalPackage
-      ;(mockRemotePackage as any)._downloadInternal = jest
-        .fn()
-        .mockResolvedValue(mockLocalPackage)
+      ;(mockRemotePackage as any)._downloadInternal = jest.fn().mockResolvedValue(mockLocalPackage)
 
       const eventCallback = jest.fn()
       queue.on(QueueEvent.QUEUE_EMPTIED, eventCallback)
@@ -223,9 +308,7 @@ describe('DownloadQueue', () => {
 
     it('emits STATUS_CHANGED events', async () => {
       const mockLocalPackage = { packageHash: 'hash123' } as LocalPackage
-      ;(mockRemotePackage as any)._downloadInternal = jest
-        .fn()
-        .mockResolvedValue(mockLocalPackage)
+      ;(mockRemotePackage as any)._downloadInternal = jest.fn().mockResolvedValue(mockLocalPackage)
 
       const eventCallback = jest.fn()
       queue.on(QueueEvent.STATUS_CHANGED, eventCallback)
@@ -260,42 +343,30 @@ describe('DownloadQueue', () => {
       expect(attempts).toBe(2)
     })
 
-    it(
-      'fails after max retries',
-      async () => {
-        ;(mockRemotePackage as any)._downloadInternal = jest
-          .fn()
-          .mockRejectedValue(new Error('Permanent failure'))
+    it('fails after max retries', async () => {
+      ;(mockRemotePackage as any)._downloadInternal = jest
+        .fn()
+        .mockRejectedValue(new Error('Permanent failure'))
 
-        await expect(queue.enqueue(mockRemotePackage)).rejects.toThrow(
-          'Permanent failure'
-        )
+      await expect(queue.enqueue(mockRemotePackage)).rejects.toThrow('Permanent failure')
 
-        expect(
-          (mockRemotePackage as any)._downloadInternal
-        ).toHaveBeenCalledTimes(3)
-      },
-      10000
-    )
+      expect((mockRemotePackage as any)._downloadInternal).toHaveBeenCalledTimes(3)
+    }, 10000)
 
-    it(
-      'uses exponential backoff',
-      async () => {
-        const delays: number[] = []
-        const startTime = Date.now()
+    it('uses exponential backoff', async () => {
+      const delays: number[] = []
+      const startTime = Date.now()
 
-        ;(mockRemotePackage as any)._downloadInternal = jest.fn(async () => {
-          const elapsed = Date.now() - startTime
-          delays.push(elapsed)
-          throw new Error('Failure')
-        })
+      ;(mockRemotePackage as any)._downloadInternal = jest.fn(async () => {
+        const elapsed = Date.now() - startTime
+        delays.push(elapsed)
+        throw new Error('Failure')
+      })
 
-        await expect(queue.enqueue(mockRemotePackage)).rejects.toThrow()
+      await expect(queue.enqueue(mockRemotePackage)).rejects.toThrow()
 
-        expect(delays.length).toBe(3)
-      },
-      10000
-    )
+      expect(delays.length).toBe(3)
+    }, 10000)
   })
 
   describe('cancel', () => {
@@ -308,7 +379,7 @@ describe('DownloadQueue', () => {
       let download1Started = false
       ;(mockRemotePackage1 as any)._downloadInternal = jest.fn(async () => {
         download1Started = true
-        await new Promise((resolve) => setTimeout(resolve, 100))
+        await new Promise(resolve => setTimeout(resolve, 100))
         return mockLocalPackage1
       })
 
@@ -316,11 +387,11 @@ describe('DownloadQueue', () => {
       const promise2 = queue.enqueue(mockRemotePackage2 as any)
 
       // Attach rejection handler immediately to prevent unhandled promise rejection
-      const promise2Rejection = promise2.catch((e) => e)
+      const promise2Rejection = promise2.catch(e => e)
 
       // Wait for first download to start
       while (!download1Started) {
-        await new Promise((resolve) => setTimeout(resolve, 10))
+        await new Promise(resolve => setTimeout(resolve, 10))
       }
 
       // Get the queued item ID (second item should still be queued)
@@ -345,7 +416,7 @@ describe('DownloadQueue', () => {
       const mockRemotePackage2 = { ...mockRemotePackage, packageHash: 'hash2' }
 
       ;(mockRemotePackage1 as any)._downloadInternal = jest.fn(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 100))
+        await new Promise(resolve => setTimeout(resolve, 100))
         return mockLocalPackage1
       })
 
@@ -356,7 +427,7 @@ describe('DownloadQueue', () => {
       const promise2 = queue.enqueue(mockRemotePackage2 as any)
 
       // Attach rejection handler to prevent unhandled promise rejection
-      const promise2Rejection = promise2.catch((e) => e)
+      const promise2Rejection = promise2.catch(e => e)
 
       const state = queue.getState()
       const queuedItemId = state.queuedItems[0]?.id
@@ -377,7 +448,7 @@ describe('DownloadQueue', () => {
       let downloadStarted = false
       ;(mockRemotePackage as any)._downloadInternal = jest.fn(async () => {
         downloadStarted = true
-        await new Promise((resolve) => setTimeout(resolve, 100))
+        await new Promise(resolve => setTimeout(resolve, 100))
         return mockLocalPackage
       })
 
@@ -385,7 +456,7 @@ describe('DownloadQueue', () => {
 
       // Wait for download to start
       while (!downloadStarted) {
-        await new Promise((resolve) => setTimeout(resolve, 10))
+        await new Promise(resolve => setTimeout(resolve, 10))
       }
 
       const state = queue.getState()
@@ -416,13 +487,13 @@ describe('DownloadQueue', () => {
     it('includes current download in total items', async () => {
       const mockLocalPackage = { packageHash: 'hash123' } as LocalPackage
       ;(mockRemotePackage as any)._downloadInternal = jest.fn(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 100))
+        await new Promise(resolve => setTimeout(resolve, 100))
         return mockLocalPackage
       })
 
       const promise = queue.enqueue(mockRemotePackage)
 
-      await new Promise((resolve) => setTimeout(resolve, 10))
+      await new Promise(resolve => setTimeout(resolve, 10))
 
       const state = queue.getState()
       expect(state.totalItems).toBe(1)
@@ -443,7 +514,7 @@ describe('DownloadQueue', () => {
       let download1Started = false
       ;(mockRemotePackage1 as any)._downloadInternal = jest.fn(async () => {
         download1Started = true
-        await new Promise((resolve) => setTimeout(resolve, 100))
+        await new Promise(resolve => setTimeout(resolve, 100))
         return mockLocalPackage1
       })
       ;(mockRemotePackage2 as any)._downloadInternal = jest
@@ -455,7 +526,7 @@ describe('DownloadQueue', () => {
 
       // Wait for first download to start
       while (!download1Started) {
-        await new Promise((resolve) => setTimeout(resolve, 10))
+        await new Promise(resolve => setTimeout(resolve, 10))
       }
 
       // Pause the queue (will take effect after first download)
@@ -465,7 +536,7 @@ describe('DownloadQueue', () => {
       await promise1
 
       // Give a small delay to ensure queue has processed the completion
-      await new Promise((resolve) => setTimeout(resolve, 20))
+      await new Promise(resolve => setTimeout(resolve, 20))
 
       // Check that queue is paused with second item still queued
       const state = queue.getState()
@@ -479,14 +550,12 @@ describe('DownloadQueue', () => {
 
     it('resumes processing', async () => {
       const mockLocalPackage = { packageHash: 'hash123' } as LocalPackage
-      ;(mockRemotePackage as any)._downloadInternal = jest
-        .fn()
-        .mockResolvedValue(mockLocalPackage)
+      ;(mockRemotePackage as any)._downloadInternal = jest.fn().mockResolvedValue(mockLocalPackage)
 
       queue.pause()
       const promise = queue.enqueue(mockRemotePackage)
 
-      await new Promise((resolve) => setTimeout(resolve, 50))
+      await new Promise(resolve => setTimeout(resolve, 50))
 
       let state = queue.getState()
       expect(state.queuedItems.length).toBe(1)
@@ -511,7 +580,7 @@ describe('DownloadQueue', () => {
       let download1Started = false
       ;(mockRemotePackage1 as any)._downloadInternal = jest.fn(async () => {
         download1Started = true
-        await new Promise((resolve) => setTimeout(resolve, 100))
+        await new Promise(resolve => setTimeout(resolve, 100))
         return mockLocalPackage1
       })
 
@@ -519,11 +588,11 @@ describe('DownloadQueue', () => {
       const promise2 = queue.enqueue(mockRemotePackage2 as any)
 
       // Attach rejection handler immediately to prevent unhandled promise rejection
-      const promise2Rejection = promise2.catch((e) => e)
+      const promise2Rejection = promise2.catch(e => e)
 
       // Wait for first download to start
       while (!download1Started) {
-        await new Promise((resolve) => setTimeout(resolve, 10))
+        await new Promise(resolve => setTimeout(resolve, 10))
       }
 
       // Clear the queue (removes second item)

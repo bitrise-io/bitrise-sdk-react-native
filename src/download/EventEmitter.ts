@@ -36,7 +36,7 @@ export class SimpleEventEmitter implements EventEmitter {
   emit(event: QueueEvent, data?: any): void {
     const callbacks = this.events.get(event)
     if (callbacks) {
-      callbacks.forEach((callback) => {
+      callbacks.forEach(callback => {
         try {
           callback(data)
         } catch (error) {

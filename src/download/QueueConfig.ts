@@ -41,9 +41,7 @@ export const DEFAULT_QUEUE_CONFIG: Required<QueueConfig> = {
 /**
  * Merge user configuration with defaults
  */
-export function mergeQueueConfig(
-  userConfig?: QueueConfig
-): Required<QueueConfig> {
+export function mergeQueueConfig(userConfig?: QueueConfig): Required<QueueConfig> {
   return {
     ...DEFAULT_QUEUE_CONFIG,
     ...userConfig,

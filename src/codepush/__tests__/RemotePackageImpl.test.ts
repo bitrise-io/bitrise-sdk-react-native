@@ -156,7 +156,6 @@ describe('RemotePackageImpl', () => {
             }),
           },
         })
-
       ;(fileUtils.calculateHash as jest.Mock)
         .mockResolvedValueOnce('abc123')
         .mockResolvedValueOnce('def456')

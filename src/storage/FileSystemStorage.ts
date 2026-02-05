@@ -99,10 +99,7 @@ export class FileSystemStorage {
    * @param hash Package hash
    * @param metadata Metadata object
    */
-  static async setPackageMetadata(
-    hash: string,
-    metadata: unknown
-  ): Promise<void> {
+  static async setPackageMetadata(hash: string, metadata: unknown): Promise<void> {
     const path = await this.getMetadataPath(hash)
     const json = JSON.stringify(metadata)
     const data = new TextEncoder().encode(json)
@@ -141,10 +138,7 @@ export class FileSystemStorage {
    * @param hash Package hash
    */
   static async deletePackage(hash: string): Promise<void> {
-    await Promise.all([
-      this.deletePackageData(hash),
-      this.deletePackageMetadata(hash),
-    ])
+    await Promise.all([this.deletePackageData(hash), this.deletePackageMetadata(hash)])
   }
 
   /**
@@ -155,9 +149,7 @@ export class FileSystemStorage {
     const storageDir = await this.getStorageDir()
     const files = await FileSystem.listDirectory(`${storageDir}/packages`)
 
-    return files
-      .filter((file) => file.endsWith('.dat'))
-      .map((file) => file.replace('.dat', ''))
+    return files.filter(file => file.endsWith('.dat')).map(file => file.replace('.dat', ''))
   }
 
   /**
@@ -165,6 +157,6 @@ export class FileSystemStorage {
    */
   static async clearAll(): Promise<void> {
     const hashes = await this.listPackages()
-    await Promise.all(hashes.map((hash) => this.deletePackage(hash)))
+    await Promise.all(hashes.map(hash => this.deletePackage(hash)))
   }
 }

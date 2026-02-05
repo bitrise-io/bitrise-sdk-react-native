@@ -28,8 +28,7 @@ interface FileSystemNativeModule {
  * ```
  */
 export class FileSystem {
-  private static _nativeModule: FileSystemNativeModule | null | undefined =
-    undefined
+  private static _nativeModule: FileSystemNativeModule | null | undefined = undefined
 
   /**
    * Get native module instance (lazy initialization)

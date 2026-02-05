@@ -54,8 +54,14 @@ describe('withBitriseAndroid', () => {
     expect(withStringsXml).toHaveBeenCalledWith(mockConfig, expect.any(Function))
     expect(AndroidConfig.Strings.setStringItem).toHaveBeenCalledWith(
       [
-        { $: { name: 'BitriseCodePushDeploymentKey', translatable: 'false' }, _: 'test-deployment-key' },
-        { $: { name: 'BitriseCodePushServerURL', translatable: 'false' }, _: 'https://api.bitrise.io' },
+        {
+          $: { name: 'BitriseCodePushDeploymentKey', translatable: 'false' },
+          _: 'test-deployment-key',
+        },
+        {
+          $: { name: 'BitriseCodePushServerURL', translatable: 'false' },
+          _: 'https://api.bitrise.io',
+        },
       ],
       expect.any(Object)
     )
@@ -76,9 +82,7 @@ describe('withBitriseAndroid', () => {
     // Assert
     expect(result).toBeDefined()
     expect(AndroidConfig.Strings.setStringItem).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({ _: 'android-specific-key' }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ _: 'android-specific-key' })]),
       expect.any(Object)
     )
   })
@@ -100,9 +104,7 @@ describe('withBitriseAndroid', () => {
     // Assert
     expect(result).toBeDefined()
     expect(AndroidConfig.Strings.setStringItem).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({ _: 'https://android-specific.url' }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ _: 'https://android-specific.url' })]),
       expect.any(Object)
     )
   })
@@ -119,9 +121,7 @@ describe('withBitriseAndroid', () => {
     // Assert
     expect(result).toBeDefined()
     expect(AndroidConfig.Strings.setStringItem).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({ _: 'top-level-key' }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ _: 'top-level-key' })]),
       expect.any(Object)
     )
   })
@@ -139,9 +139,7 @@ describe('withBitriseAndroid', () => {
     // Assert
     expect(result).toBeDefined()
     expect(AndroidConfig.Strings.setStringItem).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({ _: 'https://custom.url' }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ _: 'https://custom.url' })]),
       expect.any(Object)
     )
   })
@@ -158,9 +156,7 @@ describe('withBitriseAndroid', () => {
     // Assert
     expect(result).toBeDefined()
     expect(AndroidConfig.Strings.setStringItem).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({ _: 'https://api.bitrise.io' }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ _: 'https://api.bitrise.io' })]),
       expect.any(Object)
     )
   })

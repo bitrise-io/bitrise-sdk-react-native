@@ -22,7 +22,7 @@ import type { BitrisePluginOptions } from './types'
  * @throws Error if deployment key is not provided
  */
 export const withBitriseIos: ConfigPlugin<BitrisePluginOptions> = (config, options) => {
-  return withInfoPlist(config, (config) => {
+  return withInfoPlist(config, config => {
     // Platform-specific config takes precedence over top-level config
     const deploymentKey = options.ios?.deploymentKey || options.deploymentKey
     const serverUrl = options.ios?.serverUrl || options.serverUrl || 'https://api.bitrise.io'

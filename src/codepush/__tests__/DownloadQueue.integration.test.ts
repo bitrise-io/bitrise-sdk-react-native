@@ -66,11 +66,8 @@ describe('DownloadQueue Integration', () => {
           getReader: jest.fn().mockReturnValue(mockReader),
         },
       })
-
       ;(fileUtils.calculateHash as jest.Mock).mockResolvedValue('abc123')
-      ;(fileUtils.savePackage as jest.Mock).mockResolvedValue(
-        '/codepush/abc123/index.bundle'
-      )
+      ;(fileUtils.savePackage as jest.Mock).mockResolvedValue('/codepush/abc123/index.bundle')
 
       const localPackage = await pkg.download()
 
@@ -165,12 +162,10 @@ describe('DownloadQueue Integration', () => {
             }),
           },
         })
-
       ;(fileUtils.calculateHash as jest.Mock)
         .mockResolvedValueOnce('hash1')
         .mockResolvedValueOnce('hash2')
         .mockResolvedValueOnce('hash3')
-
       ;(fileUtils.savePackage as jest.Mock)
         .mockResolvedValueOnce('/codepush/hash1/index.bundle')
         .mockResolvedValueOnce('/codepush/hash2/index.bundle')
@@ -178,7 +173,7 @@ describe('DownloadQueue Integration', () => {
 
       // Track download order
       const downloadOrder: string[] = []
-      const onDownloadStarted = jest.fn((data) => {
+      const onDownloadStarted = jest.fn(data => {
         downloadOrder.push(data.item.remotePackage.packageHash)
       })
 
@@ -239,14 +234,11 @@ describe('DownloadQueue Integration', () => {
           getReader: jest.fn().mockReturnValue(mockReader),
         },
       })
-
       ;(fileUtils.calculateHash as jest.Mock).mockResolvedValue('abc123')
-      ;(fileUtils.savePackage as jest.Mock).mockResolvedValue(
-        '/codepush/abc123/index.bundle'
-      )
+      ;(fileUtils.savePackage as jest.Mock).mockResolvedValue('/codepush/abc123/index.bundle')
 
       const progressUpdates: any[] = []
-      const progressCallback = jest.fn((progress) => {
+      const progressCallback = jest.fn(progress => {
         progressUpdates.push(progress)
       })
 
@@ -262,54 +254,47 @@ describe('DownloadQueue Integration', () => {
   })
 
   describe('Scenario 4: Download failure and retry', () => {
-    it(
-      'retries failed downloads automatically',
-      async () => {
-        const pkg = new RemotePackageImpl({
-          appVersion: '1.0.0',
-          deploymentKey: 'test-key',
-          description: 'Test package',
-          failedInstall: false,
-          isFirstRun: false,
-          isMandatory: false,
-          isPending: false,
-          label: 'v1',
-          packageHash: 'abc123',
-          packageSize: 100,
-          downloadUrl: 'https://example.com/package.zip',
+    it('retries failed downloads automatically', async () => {
+      const pkg = new RemotePackageImpl({
+        appVersion: '1.0.0',
+        deploymentKey: 'test-key',
+        description: 'Test package',
+        failedInstall: false,
+        isFirstRun: false,
+        isMandatory: false,
+        isPending: false,
+        label: 'v1',
+        packageHash: 'abc123',
+        packageSize: 100,
+        downloadUrl: 'https://example.com/package.zip',
+      })
+
+      const mockData = new Uint8Array([1, 2, 3])
+
+      // Fail first two attempts, succeed on third
+      ;(global.fetch as jest.Mock)
+        .mockRejectedValueOnce(new Error('Network timeout'))
+        .mockRejectedValueOnce(new Error('Connection refused'))
+        .mockResolvedValueOnce({
+          ok: true,
+          headers: { get: jest.fn().mockReturnValue('3') },
+          body: {
+            getReader: jest.fn().mockReturnValue({
+              read: jest
+                .fn()
+                .mockResolvedValueOnce({ done: false, value: mockData })
+                .mockResolvedValueOnce({ done: true }),
+            }),
+          },
         })
+      ;(fileUtils.calculateHash as jest.Mock).mockResolvedValue('abc123')
+      ;(fileUtils.savePackage as jest.Mock).mockResolvedValue('/codepush/abc123/index.bundle')
 
-        const mockData = new Uint8Array([1, 2, 3])
+      const localPackage = await pkg.download()
 
-        // Fail first two attempts, succeed on third
-        ;(global.fetch as jest.Mock)
-          .mockRejectedValueOnce(new Error('Network timeout'))
-          .mockRejectedValueOnce(new Error('Connection refused'))
-          .mockResolvedValueOnce({
-            ok: true,
-            headers: { get: jest.fn().mockReturnValue('3') },
-            body: {
-              getReader: jest.fn().mockReturnValue({
-                read: jest
-                  .fn()
-                  .mockResolvedValueOnce({ done: false, value: mockData })
-                  .mockResolvedValueOnce({ done: true }),
-              }),
-            },
-          })
-
-        ;(fileUtils.calculateHash as jest.Mock).mockResolvedValue('abc123')
-        ;(fileUtils.savePackage as jest.Mock).mockResolvedValue(
-          '/codepush/abc123/index.bundle'
-        )
-
-        const localPackage = await pkg.download()
-
-        expect(localPackage.packageHash).toBe('abc123')
-        expect(global.fetch).toHaveBeenCalledTimes(3)
-      },
-      15000
-    )
+      expect(localPackage.packageHash).toBe('abc123')
+      expect(global.fetch).toHaveBeenCalledTimes(3)
+    }, 15000)
   })
 
   describe('Scenario 5: Queue events', () => {
@@ -342,21 +327,14 @@ describe('DownloadQueue Integration', () => {
           }),
         },
       })
-
       ;(fileUtils.calculateHash as jest.Mock).mockResolvedValue('abc123')
-      ;(fileUtils.savePackage as jest.Mock).mockResolvedValue(
-        '/codepush/abc123/index.bundle'
-      )
+      ;(fileUtils.savePackage as jest.Mock).mockResolvedValue('/codepush/abc123/index.bundle')
 
       const events: string[] = []
 
       queue.on(QueueEvent.ITEM_ADDED, () => events.push('item-added'))
-      queue.on(QueueEvent.DOWNLOAD_STARTED, () =>
-        events.push('download-started')
-      )
-      queue.on(QueueEvent.DOWNLOAD_COMPLETED, () =>
-        events.push('download-completed')
-      )
+      queue.on(QueueEvent.DOWNLOAD_STARTED, () => events.push('download-started'))
+      queue.on(QueueEvent.DOWNLOAD_COMPLETED, () => events.push('download-completed'))
       queue.on(QueueEvent.QUEUE_EMPTIED, () => events.push('queue-emptied'))
       queue.on(QueueEvent.STATUS_CHANGED, () => events.push('status-changed'))
 
@@ -399,7 +377,6 @@ describe('DownloadQueue Integration', () => {
         mockReader.read.mockResolvedValueOnce({ done: false, value: chunk })
       }
       mockReader.read.mockResolvedValueOnce({ done: true })
-
       ;(global.fetch as jest.Mock).mockResolvedValue({
         ok: true,
         headers: {
@@ -409,11 +386,8 @@ describe('DownloadQueue Integration', () => {
           getReader: jest.fn().mockReturnValue(mockReader),
         },
       })
-
       ;(fileUtils.calculateHash as jest.Mock).mockResolvedValue('large123')
-      ;(fileUtils.savePackage as jest.Mock).mockResolvedValue(
-        '/codepush/large123/index.bundle'
-      )
+      ;(fileUtils.savePackage as jest.Mock).mockResolvedValue('/codepush/large123/index.bundle')
 
       const localPackage = await pkg.download()
 

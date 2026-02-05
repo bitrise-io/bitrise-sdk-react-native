@@ -41,8 +41,7 @@ export class BitriseSDK {
     // Auto-read deployment key and server URL from native config (Expo plugin)
     // if not explicitly provided in the config
     const deploymentKey = config.deploymentKey ?? ExpoConfig.getDeploymentKey() ?? undefined
-    const serverUrl =
-      config.serverUrl ?? ExpoConfig.getServerUrl() ?? 'https://api.bitrise.io'
+    const serverUrl = config.serverUrl ?? ExpoConfig.getServerUrl() ?? 'https://api.bitrise.io'
 
     // Create final config with auto-read values
     const finalConfig: BitriseConfig = {
