@@ -25,16 +25,16 @@
  * }
  * ```
  */
-import { ConfigPlugin } from 'expo/config-plugins';
-import { withBitriseIos } from './withBitriseIos';
-import { withBitriseAndroid } from './withBitriseAndroid';
-import type { BitrisePluginOptions } from './types';
+import { ConfigPlugin } from 'expo/config-plugins'
+import { withBitriseIos } from './withBitriseIos'
+import { withBitriseAndroid } from './withBitriseAndroid'
+import type { BitrisePluginOptions } from './types'
 /**
  * Export the plugin wrapped in createRunOncePlugin to ensure it only runs once
  * even if added multiple times to the plugin array.
  */
-declare const _default: ConfigPlugin<BitrisePluginOptions>;
-export default _default;
-export type { BitrisePluginOptions, PlatformConfig } from './types';
-export { withBitriseIos, withBitriseAndroid };
+declare const _default: ConfigPlugin<BitrisePluginOptions>
+export default _default
+export type { BitrisePluginOptions, PlatformConfig } from './types'
+export { withBitriseIos, withBitriseAndroid }
 //# sourceMappingURL=index.d.ts.map

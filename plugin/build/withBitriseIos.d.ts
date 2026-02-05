@@ -1,8 +1,8 @@
 /**
  * Expo config plugin for iOS - modifies Info.plist with Bitrise configuration.
  */
-import { ConfigPlugin } from 'expo/config-plugins';
-import type { BitrisePluginOptions } from './types';
+import { ConfigPlugin } from 'expo/config-plugins'
+import type { BitrisePluginOptions } from './types'
 /**
  * Config plugin that adds Bitrise CodePush configuration to iOS Info.plist.
  *
@@ -19,5 +19,5 @@ import type { BitrisePluginOptions } from './types';
  * @returns Modified config with Info.plist changes
  * @throws Error if deployment key is not provided
  */
-export declare const withBitriseIos: ConfigPlugin<BitrisePluginOptions>;
+export declare const withBitriseIos: ConfigPlugin<BitrisePluginOptions>
 //# sourceMappingURL=withBitriseIos.d.ts.map

@@ -5,16 +5,16 @@
  * Platform-specific configuration for iOS or Android.
  */
 export interface PlatformConfig {
-    /**
-     * The deployment key for CodePush updates.
-     * This key identifies your app and environment (staging/production) on Bitrise.
-     */
-    deploymentKey: string;
-    /**
-     * The Bitrise server URL.
-     * @default "https://api.bitrise.io"
-     */
-    serverUrl?: string;
+  /**
+   * The deployment key for CodePush updates.
+   * This key identifies your app and environment (staging/production) on Bitrise.
+   */
+  deploymentKey: string
+  /**
+   * The Bitrise server URL.
+   * @default "https://api.bitrise.io"
+   */
+  serverUrl?: string
 }
 /**
  * Bitrise SDK Expo config plugin options.
@@ -56,24 +56,24 @@ export interface PlatformConfig {
  * ```
  */
 export interface BitrisePluginOptions {
-    /**
-     * iOS-specific configuration.
-     * If provided, takes precedence over top-level `deploymentKey` for iOS.
-     */
-    ios?: PlatformConfig;
-    /**
-     * Android-specific configuration.
-     * If provided, takes precedence over top-level `deploymentKey` for Android.
-     */
-    android?: PlatformConfig;
-    /**
-     * Deployment key used for both platforms if platform-specific keys are not provided.
-     */
-    deploymentKey?: string;
-    /**
-     * Server URL used for both platforms if platform-specific URLs are not provided.
-     * @default "https://api.bitrise.io"
-     */
-    serverUrl?: string;
+  /**
+   * iOS-specific configuration.
+   * If provided, takes precedence over top-level `deploymentKey` for iOS.
+   */
+  ios?: PlatformConfig
+  /**
+   * Android-specific configuration.
+   * If provided, takes precedence over top-level `deploymentKey` for Android.
+   */
+  android?: PlatformConfig
+  /**
+   * Deployment key used for both platforms if platform-specific keys are not provided.
+   */
+  deploymentKey?: string
+  /**
+   * Server URL used for both platforms if platform-specific URLs are not provided.
+   * @default "https://api.bitrise.io"
+   */
+  serverUrl?: string
 }
 //# sourceMappingURL=types.d.ts.map

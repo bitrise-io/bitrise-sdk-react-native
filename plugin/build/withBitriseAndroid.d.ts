@@ -1,8 +1,8 @@
 /**
  * Expo config plugin for Android - modifies strings.xml with Bitrise configuration.
  */
-import { ConfigPlugin } from 'expo/config-plugins';
-import type { BitrisePluginOptions } from './types';
+import { ConfigPlugin } from 'expo/config-plugins'
+import type { BitrisePluginOptions } from './types'
 /**
  * Config plugin that adds Bitrise CodePush configuration to Android strings.xml.
  *
@@ -19,5 +19,5 @@ import type { BitrisePluginOptions } from './types';
  * @returns Modified config with strings.xml changes
  * @throws Error if deployment key is not provided
  */
-export declare const withBitriseAndroid: ConfigPlugin<BitrisePluginOptions>;
+export declare const withBitriseAndroid: ConfigPlugin<BitrisePluginOptions>
 //# sourceMappingURL=withBitriseAndroid.d.ts.map

@@ -6,15 +6,7 @@
  */
 
 import React, { useEffect, useState } from 'react'
-import {
-  StyleSheet,
-  Text,
-  View,
-  Button,
-  ScrollView,
-  ActivityIndicator,
-  Alert,
-} from 'react-native'
+import { StyleSheet, Text, View, Button, ScrollView, ActivityIndicator, Alert } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import {
   BitriseSDK,
@@ -92,7 +84,9 @@ export default function App() {
   }
 
   const downloadUpdate = async () => {
-    if (!updateInfo) return
+    if (!updateInfo) {
+      return
+    }
 
     try {
       setStatus('Downloading update...')
@@ -114,7 +108,9 @@ export default function App() {
   }
 
   const installUpdate = async () => {
-    if (!updateInfo) return
+    if (!updateInfo) {
+      return
+    }
 
     try {
       setStatus('Installing update...')
@@ -180,20 +176,16 @@ export default function App() {
   }
 
   const restartApp = () => {
-    Alert.alert(
-      'Restart App',
-      'This will restart the application to apply pending updates.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Restart',
-          onPress: () => {
-            addLog('Restarting app...')
-            BitriseSDK.codePush.restartApp()
-          },
+    Alert.alert('Restart App', 'This will restart the application to apply pending updates.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Restart',
+        onPress: () => {
+          addLog('Restarting app...')
+          BitriseSDK.codePush.restartApp()
         },
-      ]
-    )
+      },
+    ])
   }
 
   return (
@@ -258,11 +250,7 @@ export default function App() {
           disabled={isChecking || isSyncing}
         />
 
-        <Button
-          title="Restart App"
-          onPress={restartApp}
-          disabled={isChecking || isSyncing}
-        />
+        <Button title="Restart App" onPress={restartApp} disabled={isChecking || isSyncing} />
       </View>
 
       <View style={styles.logsContainer}>
