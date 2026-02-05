@@ -27,9 +27,9 @@ describe('PackageStorage', () => {
     install: async () => {},
   })
 
-  beforeEach(() => {
-    // Clear storage before each test
-    PackageStorage.clear()
+  beforeEach(async () => {
+    // Reset storage state before each test
+    PackageStorage.reset()
     jest.clearAllMocks()
 
     // Default: FileSystem not available
@@ -48,9 +48,9 @@ describe('PackageStorage', () => {
       expect(result).toEqual(mockPackage)
     })
 
-    it('should handle invalid JSON gracefully', async () => {
-      // Manually corrupt the storage
-      ;(PackageStorage as any).cache.set('@bitrise/codepush/currentPackage', 'invalid-json')
+    it('should return null after clear', async () => {
+      await PackageStorage.setCurrentPackage(mockPackage)
+      await PackageStorage.clear()
       const result = await PackageStorage.getCurrentPackage()
       expect(result).toBeNull()
     })
@@ -80,8 +80,10 @@ describe('PackageStorage', () => {
       })
     })
 
-    it('should handle invalid JSON gracefully', async () => {
-      ;(PackageStorage as any).cache.set('@bitrise/codepush/pendingPackage', 'invalid-json')
+    it('should return null after clear', async () => {
+      const localPkg = createMockLocalPackage()
+      await PackageStorage.setPendingPackage(localPkg)
+      await PackageStorage.clear()
       const result = await PackageStorage.getPendingPackage()
       expect(result).toBeNull()
     })
@@ -123,8 +125,9 @@ describe('PackageStorage', () => {
       expect(result).toEqual(['hash1', 'hash2'])
     })
 
-    it('should handle invalid JSON gracefully', async () => {
-      ;(PackageStorage as any).cache.set('@bitrise/codepush/failedUpdates', 'invalid-json')
+    it('should return empty array after clearFailedUpdates', async () => {
+      await PackageStorage.markUpdateFailed('hash1')
+      await PackageStorage.clearFailedUpdates()
       const result = await PackageStorage.getFailedUpdates()
       expect(result).toEqual([])
     })
@@ -775,8 +778,8 @@ describe('PackageStorage', () => {
         await PackageStorage.setPackageData('hash123', emptyData)
         const retrieved = await PackageStorage.getPackageData('hash123')
 
-        // Empty string is treated as null due to || null in getPackageData
-        expect(retrieved).toBeNull()
+        // Empty string is preserved as empty string
+        expect(retrieved).toBe('')
       })
 
       it('should handle binary data', async () => {

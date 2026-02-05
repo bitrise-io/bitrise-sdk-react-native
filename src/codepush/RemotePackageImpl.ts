@@ -1,11 +1,6 @@
-import type {
-  RemotePackage,
-  LocalPackage,
-  DownloadProgress,
-  Package,
-} from '../types/package'
+import type { RemotePackage, LocalPackage, DownloadProgress, Package } from '../types/package'
 import { NetworkError, UpdateError } from '../types/errors'
-import { calculateHash, savePackage, deletePackage } from '../utils/file'
+import { calculateHash, savePackage, deletePackage, getCodePushDirectory } from '../utils/file'
 import { LocalPackageImpl } from './LocalPackageImpl'
 import { MetricsClient, MetricEvent } from '../metrics/MetricsClient'
 import { getErrorMessage } from '../utils/error'
@@ -61,9 +56,7 @@ export class RemotePackageImpl implements RemotePackage {
    * }
    * ```
    */
-  async download(
-    progressCallback?: (progress: DownloadProgress) => void
-  ): Promise<LocalPackage> {
+  async download(progressCallback?: (progress: DownloadProgress) => void): Promise<LocalPackage> {
     const queue = DownloadQueue.getInstance()
     return queue.enqueue(this, progressCallback)
   }
@@ -75,7 +68,6 @@ export class RemotePackageImpl implements RemotePackage {
   async _downloadInternal(
     progressCallback?: (progress: DownloadProgress) => void
   ): Promise<LocalPackage> {
-
     // Report DOWNLOAD_START metric
     MetricsClient.getInstance()?.reportEvent(MetricEvent.DOWNLOAD_START, {
       packageHash: this.packageHash,
@@ -137,7 +129,7 @@ export class RemotePackageImpl implements RemotePackage {
       })
       // Clean up on error (attempt to delete partial data)
       try {
-        const localPath = `/codepush/${this.packageHash}/index.bundle`
+        const localPath = `${getCodePushDirectory()}/${this.packageHash}/index.bundle`
         await deletePackage(localPath)
       } catch {
         // Ignore cleanup errors

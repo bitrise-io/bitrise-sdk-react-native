@@ -38,7 +38,14 @@ export {
 } from './types/codepush'
 
 // Errors
-export { BitriseError, ConfigurationError, NetworkError, UpdateError } from './types/errors'
+export {
+  BitriseError,
+  ConfigurationError,
+  NetworkError,
+  UpdateError,
+  FileSystemError,
+  TimeoutError,
+} from './types/errors'
 
 // Utilities
 export { setAppVersion } from './utils/platform'

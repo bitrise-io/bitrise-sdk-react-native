@@ -8,7 +8,7 @@ import type {
   UpdateDialogOptions,
 } from '../types/package'
 import { SyncStatus, UpdateState } from '../types/enums'
-import { ConfigurationError, UpdateError } from '../types/errors'
+import { ConfigurationError, UpdateError, TimeoutError } from '../types/errors'
 import { BitriseClient } from '../network/BitriseClient'
 import { PackageStorage } from '../storage/PackageStorage'
 import { getAppVersion } from '../utils/platform'
@@ -17,6 +17,13 @@ import { restartApp as nativeRestart } from '../native/Restart'
 import { RollbackManager } from './RollbackManager'
 import { MetricsClient, MetricEvent } from '../metrics/MetricsClient'
 import { getErrorMessage } from '../utils/error'
+
+/**
+ * CodePush functionality for over-the-air updates
+ * Compatible with react-native-code-push API
+ */
+/** Default sync timeout: 5 minutes */
+const DEFAULT_SYNC_TIMEOUT_MS = 5 * 60 * 1000
 
 /**
  * CodePush functionality for over-the-air updates
@@ -247,6 +254,60 @@ export class CodePush {
       return SyncStatus.SYNC_IN_PROGRESS
     }
 
+    // Apply timeout if configured (default: 5 minutes, 0 = disabled)
+    const timeoutMs = options?.syncTimeoutMs ?? DEFAULT_SYNC_TIMEOUT_MS
+    if (timeoutMs > 0) {
+      return this.syncWithTimeout(options, timeoutMs)
+    }
+
+    return this.performSync(options)
+  }
+
+  /**
+   * Perform sync with a timeout wrapper
+   */
+  private async syncWithTimeout(
+    options: SyncOptions | undefined,
+    timeoutMs: number
+  ): Promise<SyncStatus> {
+    return new Promise<SyncStatus>((resolve, reject) => {
+      let settled = false
+
+      const timeoutId = setTimeout(() => {
+        if (!settled) {
+          settled = true
+          this.isSyncing = false
+          reject(
+            new TimeoutError(`Sync operation timed out after ${timeoutMs}ms`, {
+              timeoutMs,
+              operation: 'sync',
+            })
+          )
+        }
+      }, timeoutMs)
+
+      this.performSync(options)
+        .then(result => {
+          if (!settled) {
+            settled = true
+            clearTimeout(timeoutId)
+            resolve(result)
+          }
+        })
+        .catch(error => {
+          if (!settled) {
+            settled = true
+            clearTimeout(timeoutId)
+            reject(error)
+          }
+        })
+    })
+  }
+
+  /**
+   * Perform the actual sync operation
+   */
+  private async performSync(options?: SyncOptions): Promise<SyncStatus> {
     try {
       this.isSyncing = true
 
@@ -281,16 +342,16 @@ export class CodePush {
         }
       }
 
-      // PHASE 5: Download package
+      // PHASE 6: Download package
       const localPackage = await remotePackage.download()
 
-      // PHASE 6: Install package
+      // PHASE 7: Install package
       await localPackage.install(installMode, options?.minimumBackgroundDuration)
 
       return SyncStatus.UPDATE_INSTALLED
     } catch (error) {
-      // Let ConfigurationError bubble up (user misconfiguration)
-      if (error instanceof ConfigurationError) {
+      // Let ConfigurationError and TimeoutError bubble up
+      if (error instanceof ConfigurationError || error instanceof TimeoutError) {
         throw error
       }
 

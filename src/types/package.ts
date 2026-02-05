@@ -202,6 +202,13 @@ export interface SyncOptions {
    * Ignore updates that previously failed to install
    */
   ignoreFailedUpdates?: boolean
+
+  /**
+   * Maximum time in milliseconds for the entire sync operation
+   * Default: 5 minutes (300000ms)
+   * Set to 0 to disable timeout
+   */
+  syncTimeoutMs?: number
 }
 
 /**

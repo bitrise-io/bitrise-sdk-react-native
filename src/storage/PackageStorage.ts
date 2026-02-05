@@ -1,10 +1,5 @@
 import type { Package, LocalPackage } from '../types/package'
-import {
-  getStorageItem,
-  setStorageItem,
-  removeStorageItem,
-  clearStorage,
-} from '../utils/storage'
+import { PersistentStorage } from '../utils/storage'
 import { FileSystem } from '../native/FileSystem'
 import { FileSystemStorage } from './FileSystemStorage'
 
@@ -22,52 +17,50 @@ const STORAGE_KEYS = {
 } as const
 
 /**
- * Package storage using in-memory cache
- * In production, this should use AsyncStorage or similar persistent storage
+ * Package storage using persistent filesystem-backed storage with in-memory cache
+ * Provides thread-safe operations through operation queuing
  */
 export class PackageStorage {
-  private static cache: Map<string, string> = new Map()
-
   /**
    * Get the currently running package
    */
   static async getCurrentPackage(): Promise<Package | null> {
-    return getStorageItem<Package>(this.cache, STORAGE_KEYS.CURRENT_PACKAGE, null)
+    return PersistentStorage.getItem<Package>(STORAGE_KEYS.CURRENT_PACKAGE, null)
   }
 
   /**
    * Set the currently running package
    */
   static async setCurrentPackage(pkg: Package): Promise<void> {
-    setStorageItem(this.cache, STORAGE_KEYS.CURRENT_PACKAGE, pkg)
+    await PersistentStorage.setItem(STORAGE_KEYS.CURRENT_PACKAGE, pkg)
   }
 
   /**
    * Get the pending package (installed but not yet running)
    */
   static async getPendingPackage(): Promise<LocalPackage | null> {
-    return getStorageItem<LocalPackage>(this.cache, STORAGE_KEYS.PENDING_PACKAGE, null)
+    return PersistentStorage.getItem<LocalPackage>(STORAGE_KEYS.PENDING_PACKAGE, null)
   }
 
   /**
    * Set the pending package
    */
   static async setPendingPackage(pkg: LocalPackage): Promise<void> {
-    setStorageItem(this.cache, STORAGE_KEYS.PENDING_PACKAGE, pkg)
+    await PersistentStorage.setItem(STORAGE_KEYS.PENDING_PACKAGE, pkg)
   }
 
   /**
    * Clear the pending package
    */
   static async clearPendingPackage(): Promise<void> {
-    removeStorageItem(this.cache, STORAGE_KEYS.PENDING_PACKAGE)
+    await PersistentStorage.removeItem(STORAGE_KEYS.PENDING_PACKAGE)
   }
 
   /**
    * Get the list of failed update hashes
    */
   static async getFailedUpdates(): Promise<string[]> {
-    return getStorageItem<string[]>(this.cache, STORAGE_KEYS.FAILED_UPDATES, []) || []
+    return (await PersistentStorage.getItem<string[]>(STORAGE_KEYS.FAILED_UPDATES, [])) || []
   }
 
   /**
@@ -77,7 +70,7 @@ export class PackageStorage {
     const failed = await this.getFailedUpdates()
     if (!failed.includes(packageHash)) {
       failed.push(packageHash)
-      setStorageItem(this.cache, STORAGE_KEYS.FAILED_UPDATES, failed)
+      await PersistentStorage.setItem(STORAGE_KEYS.FAILED_UPDATES, failed)
     }
   }
 
@@ -87,9 +80,9 @@ export class PackageStorage {
    */
   static async setFailedUpdates(hashes: string[]): Promise<void> {
     if (hashes.length === 0) {
-      removeStorageItem(this.cache, STORAGE_KEYS.FAILED_UPDATES)
+      await PersistentStorage.removeItem(STORAGE_KEYS.FAILED_UPDATES)
     } else {
-      setStorageItem(this.cache, STORAGE_KEYS.FAILED_UPDATES, hashes)
+      await PersistentStorage.setItem(STORAGE_KEYS.FAILED_UPDATES, hashes)
     }
   }
 
@@ -97,36 +90,33 @@ export class PackageStorage {
    * Clear failed updates list
    */
   static async clearFailedUpdates(): Promise<void> {
-    removeStorageItem(this.cache, STORAGE_KEYS.FAILED_UPDATES)
+    await PersistentStorage.removeItem(STORAGE_KEYS.FAILED_UPDATES)
   }
 
   /**
    * Clear all storage
    */
   static async clear(): Promise<void> {
-    clearStorage(this.cache)
+    await PersistentStorage.clear()
   }
 
   /**
    * Store package binary data (base64 encoded)
    * Automatically uses filesystem if available, otherwise falls back to in-memory
    */
-  static async setPackageData(
-    packageHash: string,
-    base64Data: string
-  ): Promise<void> {
+  static async setPackageData(packageHash: string, base64Data: string): Promise<void> {
     if (FileSystem.isAvailable()) {
       try {
         const data = this.base64ToUint8Array(base64Data)
         await FileSystemStorage.setPackageData(packageHash, data)
         return
       } catch (error) {
-        console.warn('[CodePush] Filesystem write failed, using in-memory:', error)
+        console.warn('[CodePush] Filesystem write failed, using persistent storage:', error)
       }
     }
 
     const key = `${STORAGE_KEYS.PACKAGE_DATA_PREFIX}${packageHash}`
-    this.cache.set(key, base64Data)
+    await PersistentStorage.setItem(key, base64Data)
   }
 
   /**
@@ -141,12 +131,12 @@ export class PackageStorage {
           return this.uint8ArrayToBase64(data)
         }
       } catch (error) {
-        console.warn('[CodePush] Filesystem read failed, using in-memory:', error)
+        console.warn('[CodePush] Filesystem read failed, using persistent storage:', error)
       }
     }
 
     const key = `${STORAGE_KEYS.PACKAGE_DATA_PREFIX}${packageHash}`
-    return this.cache.get(key) || null
+    return PersistentStorage.getItem<string>(key, null)
   }
 
   /**
@@ -163,7 +153,7 @@ export class PackageStorage {
     }
 
     const key = `${STORAGE_KEYS.PACKAGE_DATA_PREFIX}${packageHash}`
-    this.cache.delete(key)
+    await PersistentStorage.removeItem(key)
   }
 
   /**
@@ -209,7 +199,7 @@ export class PackageStorage {
     metadata: { installMode: number; timestamp: number; minimumBackgroundDuration?: number }
   ): Promise<void> {
     const key = `${STORAGE_KEYS.INSTALL_METADATA_PREFIX}${packageHash}`
-    setStorageItem(this.cache, key, metadata)
+    await PersistentStorage.setItem(key, metadata)
   }
 
   /**
@@ -221,7 +211,7 @@ export class PackageStorage {
     minimumBackgroundDuration?: number
   } | null> {
     const key = `${STORAGE_KEYS.INSTALL_METADATA_PREFIX}${packageHash}`
-    return getStorageItem(this.cache, key, null)
+    return PersistentStorage.getItem(key, null)
   }
 
   /**
@@ -238,7 +228,7 @@ export class PackageStorage {
     }
   ): Promise<void> {
     const key = `${STORAGE_KEYS.ROLLBACK_METADATA_PREFIX}${packageHash}`
-    setStorageItem(this.cache, key, metadata)
+    await PersistentStorage.setItem(key, metadata)
   }
 
   /**
@@ -252,7 +242,7 @@ export class PackageStorage {
     previousPackageHash: string
   } | null> {
     const key = `${STORAGE_KEYS.ROLLBACK_METADATA_PREFIX}${packageHash}`
-    return getStorageItem(this.cache, key, null)
+    return PersistentStorage.getItem(key, null)
   }
 
   /**
@@ -261,13 +251,13 @@ export class PackageStorage {
   static async clearRollbackMetadata(packageHash?: string): Promise<void> {
     if (packageHash) {
       const key = `${STORAGE_KEYS.ROLLBACK_METADATA_PREFIX}${packageHash}`
-      removeStorageItem(this.cache, key)
+      await PersistentStorage.removeItem(key)
     } else {
       // Clear all rollback metadata
-      const keys = Array.from(this.cache.keys()).filter(key =>
-        key.startsWith(STORAGE_KEYS.ROLLBACK_METADATA_PREFIX)
-      )
-      keys.forEach(key => removeStorageItem(this.cache, key))
+      const keys = await PersistentStorage.getKeys(STORAGE_KEYS.ROLLBACK_METADATA_PREFIX)
+      for (const key of keys) {
+        await PersistentStorage.removeItem(key)
+      }
     }
   }
 
@@ -281,14 +271,14 @@ export class PackageStorage {
     filtered.unshift(pkg)
     // Keep only last 3
     const trimmed = filtered.slice(0, 3)
-    setStorageItem(this.cache, STORAGE_KEYS.PACKAGE_HISTORY, trimmed)
+    await PersistentStorage.setItem(STORAGE_KEYS.PACKAGE_HISTORY, trimmed)
   }
 
   /**
    * Get package history (up to last 3 versions)
    */
   static async getPackageHistory(): Promise<Package[]> {
-    return getStorageItem<Package[]>(this.cache, STORAGE_KEYS.PACKAGE_HISTORY, []) || []
+    return (await PersistentStorage.getItem<Package[]>(STORAGE_KEYS.PACKAGE_HISTORY, [])) || []
   }
 
   /**
@@ -297,5 +287,13 @@ export class PackageStorage {
   static async getPackageByHash(packageHash: string): Promise<Package | null> {
     const history = await this.getPackageHistory()
     return history.find(p => p.packageHash === packageHash) || null
+  }
+
+  /**
+   * Reset storage state (for testing)
+   * @internal
+   */
+  static reset(): void {
+    PersistentStorage.reset()
   }
 }

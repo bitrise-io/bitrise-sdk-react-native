@@ -59,3 +59,14 @@ export class FileSystemError extends BitriseError {
     Object.setPrototypeOf(this, FileSystemError.prototype)
   }
 }
+
+/**
+ * Error thrown when operations timeout
+ */
+export class TimeoutError extends BitriseError {
+  constructor(message: string, details?: { timeoutMs?: number; operation?: string }) {
+    super(message, 'TIMEOUT_ERROR', details)
+    this.name = 'TimeoutError'
+    Object.setPrototypeOf(this, TimeoutError.prototype)
+  }
+}

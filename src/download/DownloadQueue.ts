@@ -2,15 +2,22 @@ import { SimpleEventEmitter } from './EventEmitter'
 import type { QueueItem, QueueState, QueueStatus } from './QueueItem'
 import { QueueStatus as Status } from './QueueItem'
 import { QueueEvent } from './QueueEvents'
-import type {
-  RemotePackage,
-  LocalPackage,
-  DownloadProgress,
-} from '../types/package'
+import type { RemotePackage, LocalPackage, DownloadProgress } from '../types/package'
 import type { QueueConfig } from './QueueConfig'
 import { mergeQueueConfig } from './QueueConfig'
 import { QueueStatisticsTracker } from './QueueStatistics'
 import type { QueueStatistics } from './QueueStatistics'
+
+/**
+ * Internal interface for RemotePackage with download implementation
+ * Used by DownloadQueue to call the internal download method
+ * RemotePackageImpl implements this interface
+ */
+interface DownloadablePackage {
+  packageHash: string
+  packageSize: number
+  _downloadInternal(progressCallback?: (progress: DownloadProgress) => void): Promise<LocalPackage>
+}
 
 /**
  * DownloadQueue manages sequential downloads
@@ -130,11 +137,7 @@ export class DownloadQueue {
         const localPackage = await this.downloadWithRetry(item)
 
         const downloadTime = Date.now() - item.startedAt
-        this.statistics.recordSuccess(
-          waitTime,
-          downloadTime,
-          item.remotePackage.packageSize
-        )
+        this.statistics.recordSuccess(waitTime, downloadTime, item.remotePackage.packageSize)
 
         item.promise.resolve(localPackage)
         this.eventEmitter.emit(QueueEvent.DOWNLOAD_COMPLETED, {
@@ -142,12 +145,8 @@ export class DownloadQueue {
           package: localPackage,
         })
       } catch (error) {
-        const downloadTime = item.startedAt
-          ? Date.now() - item.startedAt
-          : 0
-        const waitTime = item.startedAt
-          ? item.startedAt - item.addedAt
-          : Date.now() - item.addedAt
+        const downloadTime = item.startedAt ? Date.now() - item.startedAt : 0
+        const waitTime = item.startedAt ? item.startedAt - item.addedAt : Date.now() - item.addedAt
 
         this.statistics.recordFailure(waitTime, downloadTime)
 
@@ -189,14 +188,13 @@ export class DownloadQueue {
           )
         }
 
-        const localPackage = await (item.remotePackage as any)._downloadInternal(
-          item.progressCallback
-        )
+        // Cast to DownloadablePackage to access internal download method
+        // RemotePackageImpl implements this interface
+        const downloadable = item.remotePackage as unknown as DownloadablePackage
+        const localPackage = await downloadable._downloadInternal(item.progressCallback)
 
         if (this.config.debug) {
-          console.log(
-            `[DownloadQueue] Download successful: ${item.remotePackage.packageHash}`
-          )
+          console.log(`[DownloadQueue] Download successful: ${item.remotePackage.packageHash}`)
         }
 
         return localPackage
@@ -235,7 +233,7 @@ export class DownloadQueue {
    * @param itemId Queue item ID
    */
   async cancel(itemId: string): Promise<void> {
-    const index = this.queue.findIndex((item) => item.id === itemId)
+    const index = this.queue.findIndex(item => item.id === itemId)
 
     if (index >= 0) {
       const items = this.queue.splice(index, 1)
@@ -307,7 +305,7 @@ export class DownloadQueue {
    */
   clear(): void {
     const items = this.queue.splice(0)
-    items.forEach((item) => {
+    items.forEach(item => {
       const waitTime = Date.now() - item.addedAt
       this.statistics.recordCancellation(waitTime)
 
@@ -341,6 +339,6 @@ export class DownloadQueue {
    * Delay helper
    */
   private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms))
+    return new Promise(resolve => setTimeout(resolve, ms))
   }
 }

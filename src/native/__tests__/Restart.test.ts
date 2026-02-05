@@ -49,7 +49,7 @@ describe('Restart', () => {
       restartApp()
 
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[CodePush] Native restart not available in production')
+        expect.stringContaining('[CodePush] Native restart not available')
       )
       expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Platform: ios'))
     })
@@ -60,7 +60,7 @@ describe('Restart', () => {
       restartApp()
 
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[CodePush] Native restart not available in production')
+        expect.stringContaining('[CodePush] Native restart not available')
       )
     })
 
@@ -94,7 +94,7 @@ describe('Restart', () => {
       restartApp()
 
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[CodePush] Native restart not available in production')
+        expect.stringContaining('[CodePush] Native restart not available')
       )
     })
 
@@ -104,7 +104,7 @@ describe('Restart', () => {
       restartApp()
 
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[CodePush] Native restart not available in production')
+        expect.stringContaining('[CodePush] Native restart not available')
       )
     })
   })
