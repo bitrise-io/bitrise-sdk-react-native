@@ -41,7 +41,14 @@ export class BitriseSDK {
     // Auto-read deployment key and server URL from native config (Expo plugin)
     // if not explicitly provided in the config
     const deploymentKey = config.deploymentKey ?? ExpoConfig.getDeploymentKey() ?? undefined
-    const serverUrl = config.serverUrl ?? ExpoConfig.getServerUrl() ?? 'https://api.bitrise.io'
+
+    // Construct serverUrl from workspaceSlug if provided, otherwise fall back to explicit serverUrl or native config
+    let serverUrl: string | undefined
+    if (config.workspaceSlug) {
+      serverUrl = `https://${config.workspaceSlug}.codepush.bitrise.io`
+    } else {
+      serverUrl = config.serverUrl ?? ExpoConfig.getServerUrl() ?? undefined
+    }
 
     // Create final config with auto-read values
     const finalConfig: BitriseConfig = {
@@ -111,6 +118,22 @@ export class BitriseSDK {
       if (typeof config.deploymentKey !== 'string' || config.deploymentKey.trim().length === 0) {
         throw new ConfigurationError('deploymentKey must be a non-empty string')
       }
+    }
+
+    // Validate workspaceSlug if provided (should be non-empty string)
+    if (config.workspaceSlug !== undefined) {
+      if (typeof config.workspaceSlug !== 'string' || config.workspaceSlug.trim().length === 0) {
+        throw new ConfigurationError('workspaceSlug must be a non-empty string')
+      }
+    }
+
+    // If deploymentKey is provided, either workspaceSlug or serverUrl must also be provided
+    if (config.deploymentKey && !config.serverUrl && !config.workspaceSlug) {
+      throw new ConfigurationError(
+        'workspaceSlug is required when using CodePush. ' +
+          'Provide workspaceSlug to automatically construct the server URL, ' +
+          'or provide serverUrl directly.'
+      )
     }
   }
 }

@@ -6,6 +6,14 @@ import { PersistentStorage } from '../utils/storage'
 const METRICS_QUEUE_KEY = '@bitrise/codepush/metricsQueue'
 
 /**
+ * CodePush deployment status values
+ */
+export enum DeploymentStatus {
+  SUCCEEDED = 'DeploymentSucceeded',
+  FAILED = 'DeploymentFailed',
+}
+
+/**
  * Metric event types reported to the Bitrise server
  */
 export enum MetricEvent {
@@ -21,17 +29,25 @@ export enum MetricEvent {
 }
 
 /**
+ * Endpoint type for routing metrics
+ */
+type EndpointType = 'deploy' | 'download'
+
+/**
  * Metric payload sent to the server
  */
 interface MetricPayload {
   event: MetricEvent
+  endpointType: EndpointType
   clientId: string
   deploymentKey: string
   appVersion: string
   packageHash?: string
   label?: string
   timestamp: number
-  metadata?: Record<string, any>
+  status?: DeploymentStatus
+  previousLabelOrAppVersion?: string
+  previousDeploymentKey?: string
 }
 
 /**
@@ -130,34 +146,73 @@ export class MetricsClient {
   }
 
   /**
+   * Get the endpoint type for a given event
+   */
+  private getEndpointType(event: MetricEvent): EndpointType {
+    switch (event) {
+      case MetricEvent.DOWNLOAD_START:
+      case MetricEvent.DOWNLOAD_COMPLETE:
+      case MetricEvent.DOWNLOAD_FAILED:
+        return 'download'
+      default:
+        // Deploy, install, app ready, rollback events go to deploy endpoint
+        return 'deploy'
+    }
+  }
+
+  /**
+   * Get the deployment status for a given event
+   */
+  private getDeploymentStatus(event: MetricEvent): DeploymentStatus | undefined {
+    switch (event) {
+      case MetricEvent.INSTALL_COMPLETE:
+      case MetricEvent.APP_READY:
+        return DeploymentStatus.SUCCEEDED
+      case MetricEvent.INSTALL_FAILED:
+      case MetricEvent.ROLLBACK:
+        return DeploymentStatus.FAILED
+      default:
+        return undefined
+    }
+  }
+
+  /**
    * Report a metric event
    *
    * Events are queued and sent in batches to minimize network overhead.
    *
    * @param event - Type of event to report
-   * @param data - Optional event data (packageHash, label, metadata)
+   * @param data - Optional event data (packageHash, label, status info, metadata)
    */
   reportEvent(
     event: MetricEvent,
     data?: {
       packageHash?: string
       label?: string
-      metadata?: Record<string, any>
+      previousLabelOrAppVersion?: string
+      previousDeploymentKey?: string
+      metadata?: Record<string, unknown>
     }
   ): void {
     if (!this.isEnabled) {
       return
     }
 
+    const endpointType = this.getEndpointType(event)
+    const status = this.getDeploymentStatus(event)
+
     const payload: MetricPayload = {
       event,
+      endpointType,
       clientId: this.clientId,
       deploymentKey: this.deploymentKey,
       appVersion: this.appVersion,
       packageHash: data?.packageHash,
       label: data?.label,
       timestamp: Date.now(),
-      metadata: data?.metadata,
+      status,
+      previousLabelOrAppVersion: data?.previousLabelOrAppVersion,
+      previousDeploymentKey: data?.previousDeploymentKey,
     }
 
     this.queue.push(payload)
@@ -176,6 +231,75 @@ export class MetricsClient {
   }
 
   /**
+   * Build request body for deploy status endpoint (snake_case)
+   */
+  private buildDeployRequestBody(payload: MetricPayload): Record<string, unknown> {
+    const body: Record<string, unknown> = {
+      app_version: payload.appVersion,
+      deployment_key: payload.deploymentKey,
+      client_unique_id: payload.clientId,
+    }
+
+    if (payload.label) {
+      body.label = payload.label
+    }
+
+    if (payload.status) {
+      body.status = payload.status
+    }
+
+    if (payload.previousLabelOrAppVersion) {
+      body.previous_label_or_app_version = payload.previousLabelOrAppVersion
+    }
+
+    if (payload.previousDeploymentKey) {
+      body.previous_deployment_key = payload.previousDeploymentKey
+    }
+
+    return body
+  }
+
+  /**
+   * Build request body for download status endpoint (snake_case)
+   */
+  private buildDownloadRequestBody(payload: MetricPayload): Record<string, unknown> {
+    return {
+      client_unique_id: payload.clientId,
+      deployment_key: payload.deploymentKey,
+      label: payload.label || '',
+    }
+  }
+
+  /**
+   * Send a single metric to the appropriate endpoint
+   */
+  private async sendMetric(payload: MetricPayload): Promise<boolean> {
+    const endpoint =
+      payload.endpointType === 'download'
+        ? `${this.serverUrl}/v0.1/public/codepush/report_status/download`
+        : `${this.serverUrl}/v0.1/public/codepush/report_status/deploy`
+
+    const body =
+      payload.endpointType === 'download'
+        ? this.buildDownloadRequestBody(payload)
+        : this.buildDeployRequestBody(payload)
+
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      })
+
+      return response.ok
+    } catch {
+      return false
+    }
+  }
+
+  /**
    * Flush queued metrics to server
    *
    * This is called automatically based on queue size and periodic timer.
@@ -189,29 +313,32 @@ export class MetricsClient {
     const batch = this.queue.splice(0, this.batchSize)
     this.isFlushing = true
 
-    try {
-      const response = await fetch(`${this.serverUrl}/release-management/v1/metrics`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Deployment-Key': this.deploymentKey,
-        },
-        body: JSON.stringify({ events: batch }),
-      })
+    const failedPayloads: MetricPayload[] = []
 
-      if (!response.ok) {
-        console.warn(`[CodePush] Metrics report failed: ${response.status}`)
-        // Re-queue on failure (up to limit)
-        if (this.queue.length < 100) {
-          this.queue.unshift(...batch)
+    try {
+      // Send each metric to its appropriate endpoint
+      for (const payload of batch) {
+        const success = await this.sendMetric(payload)
+        if (!success) {
+          failedPayloads.push(payload)
         }
-      } else {
-        // Clear persisted queue after successful flush
+      }
+
+      if (failedPayloads.length > 0) {
+        console.warn(`[CodePush] ${failedPayloads.length} metrics failed to report`)
+        // Re-queue failed payloads (up to limit)
+        if (this.queue.length < 100) {
+          this.queue.unshift(...failedPayloads)
+        }
+      }
+
+      // Clear persisted queue if all succeeded
+      if (failedPayloads.length === 0) {
         await this.clearPersistedQueue()
       }
     } catch (error) {
       console.warn('[CodePush] Metrics report error:', error)
-      // Re-queue on error
+      // Re-queue all on error
       if (this.queue.length < 100) {
         this.queue.unshift(...batch)
       }

@@ -5,7 +5,7 @@ import { NetworkError } from '../../types/errors'
 global.fetch = jest.fn()
 
 describe('BitriseClient', () => {
-  const mockServerUrl = 'https://api.bitrise.io'
+  const mockServerUrl = 'https://test-workspace.codepush.bitrise.io'
   const mockDeploymentKey = 'test-deployment-key'
   const mockAppVersion = '1.0.0'
 
@@ -18,16 +18,17 @@ describe('BitriseClient', () => {
 
   describe('checkForUpdate', () => {
     it('should return RemotePackage when update is available', async () => {
+      // Response uses snake_case (from CodePush API)
       const mockResponse = {
-        updateInfo: {
-          downloadUrl: 'https://example.com/package.zip',
+        update_info: {
+          download_url: 'https://example.com/package.zip',
           description: 'Test update',
-          isAvailable: true,
-          isMandatory: false,
-          appVersion: '1.0.0',
-          packageHash: 'abc123',
+          is_available: true,
+          is_mandatory: false,
+          target_binary_range: '1.0.0',
+          package_hash: 'abc123',
           label: 'v1',
-          packageSize: 1024,
+          package_size: 1024,
         },
       }
 
@@ -44,21 +45,21 @@ describe('BitriseClient', () => {
       expect(result?.packageHash).toBe('abc123')
       expect(result?.isMandatory).toBe(false)
       expect(result?.downloadUrl).toBe('https://example.com/package.zip')
-      expect(global.fetch).toHaveBeenCalledWith(
-        'https://api.bitrise.io/release-management/v1/code-push/update_check',
-        expect.objectContaining({
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        })
-      )
+
+      // Verify GET request to correct endpoint
+      const calledUrl = (global.fetch as jest.Mock).mock.calls[0][0] as string
+      const calledOptions = (global.fetch as jest.Mock).mock.calls[0][1]
+
+      expect(calledUrl).toContain('/v0.1/public/codepush/update_check?')
+      expect(calledUrl).toContain('deployment_key=test-deployment-key')
+      expect(calledUrl).toContain('app_version=1.0.0')
+      expect(calledOptions.method).toBe('GET')
     })
 
     it('should return null when no update is available', async () => {
       const mockResponse = {
-        updateInfo: {
-          isAvailable: false,
+        update_info: {
+          is_available: false,
         },
       }
 
@@ -73,7 +74,7 @@ describe('BitriseClient', () => {
       expect(result).toBeNull()
     })
 
-    it('should return null when updateInfo is missing', async () => {
+    it('should return null when update_info is missing', async () => {
       ;(global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
         status: 200,
@@ -111,10 +112,10 @@ describe('BitriseClient', () => {
 
     it('should return null when binary update is required', async () => {
       const mockResponse = {
-        updateInfo: {
-          isAvailable: true,
-          shouldRunBinaryVersion: true,
-          appVersion: '2.0.0',
+        update_info: {
+          is_available: true,
+          should_run_binary_version: true,
+          target_binary_range: '2.0.0',
         },
       }
 
@@ -129,21 +130,20 @@ describe('BitriseClient', () => {
       expect(result).toBeNull()
     })
 
-    it('should include current package hash in request', async () => {
+    it('should include current package hash in query parameters', async () => {
       ;(global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => ({ updateInfo: { isAvailable: false } }),
+        json: async () => ({ update_info: { is_available: false } }),
       })
 
       await client.checkForUpdate('existing-hash-123')
 
-      const callArgs = (global.fetch as jest.Mock).mock.calls[0]
-      const requestBody = JSON.parse(callArgs[1].body)
+      const calledUrl = (global.fetch as jest.Mock).mock.calls[0][0] as string
 
-      expect(requestBody.packageHash).toBe('existing-hash-123')
-      expect(requestBody.appVersion).toBe('1.0.0')
-      expect(requestBody.deploymentKey).toBe('test-deployment-key')
+      expect(calledUrl).toContain('package_hash=existing-hash-123')
+      expect(calledUrl).toContain('app_version=1.0.0')
+      expect(calledUrl).toContain('deployment_key=test-deployment-key')
     })
 
     it('should retry on network failure', async () => {
@@ -152,7 +152,7 @@ describe('BitriseClient', () => {
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
-          json: async () => ({ updateInfo: { isAvailable: false } }),
+          json: async () => ({ update_info: { is_available: false } }),
         })
 
       // Mock setTimeout to avoid actual delays in tests
@@ -191,7 +191,7 @@ describe('BitriseClient', () => {
   describe('constructor', () => {
     it('should remove trailing slash from server URL', async () => {
       const clientWithSlash = new BitriseClient(
-        'https://api.bitrise.io/',
+        'https://test-workspace.codepush.bitrise.io/',
         mockDeploymentKey,
         mockAppVersion
       )
@@ -204,9 +204,9 @@ describe('BitriseClient', () => {
 
       await clientWithSlash.checkForUpdate()
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        'https://api.bitrise.io/release-management/v1/code-push/update_check',
-        expect.anything()
+      const calledUrl = (global.fetch as jest.Mock).mock.calls[0][0] as string
+      expect(calledUrl).toContain(
+        'https://test-workspace.codepush.bitrise.io/v0.1/public/codepush/update_check'
       )
     })
   })

@@ -4,23 +4,20 @@ import { RemotePackageImpl } from '../codepush/RemotePackageImpl'
 import { getErrorMessage } from '../utils/error'
 
 /**
- * Response from Bitrise CodePush check for update endpoint
+ * Response from CodePush check for update endpoint (snake_case from server)
  */
 interface CheckUpdateResponse {
-  updateInfo?: {
-    downloadUrl: string
+  update_info?: {
+    download_url: string
     description: string
-    isAvailable: boolean
-    isMandatory: boolean
-    appVersion: string
-    packageHash: string
+    is_available: boolean
+    is_mandatory: boolean
+    target_binary_range: string
+    package_hash: string
     label: string
-    packageSize: number
-    shouldRunBinaryVersion?: boolean
-    updateAppVersion?: boolean
-    // Optional differential update fields (server-driven)
-    diffUrl?: string
-    diffSize?: number
+    package_size: number
+    should_run_binary_version?: boolean
+    update_app_version?: boolean
   }
 }
 
@@ -74,30 +71,35 @@ export class BitriseClient {
   /**
    * Check for available updates with binary version mismatch information
    * @param currentPackageHash - Hash of currently installed package (if any)
+   * @param currentLabel - Label of currently installed package (if any)
    * @returns CheckUpdateResult with package and mismatch info
    * @internal Used by sync() to support mismatch callbacks
    */
-  async checkForUpdateWithMismatchInfo(currentPackageHash?: string): Promise<CheckUpdateResult> {
-    const url = `${this.serverUrl}/release-management/v1/code-push/update_check`
-
+  async checkForUpdateWithMismatchInfo(
+    currentPackageHash?: string,
+    currentLabel?: string
+  ): Promise<CheckUpdateResult> {
     const clientUniqueId = await this.getClientUniqueId()
 
-    const requestBody = {
-      appVersion: this.appVersion,
-      deploymentKey: this.deploymentKey,
-      packageHash: currentPackageHash,
-      isCompanion: false,
-      label: null,
-      clientUniqueId,
+    // Build query parameters (snake_case as per CodePush API)
+    const queryParams = new URLSearchParams()
+    queryParams.set('deployment_key', this.deploymentKey)
+    queryParams.set('app_version', this.appVersion)
+    queryParams.set('client_unique_id', clientUniqueId)
+    queryParams.set('is_companion', 'false')
+
+    if (currentPackageHash) {
+      queryParams.set('package_hash', currentPackageHash)
     }
+    if (currentLabel) {
+      queryParams.set('label', currentLabel)
+    }
+
+    const url = `${this.serverUrl}/v0.1/public/codepush/update_check?${queryParams.toString()}`
 
     try {
       const response = await this.fetchWithRetry(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
+        method: 'GET',
       })
 
       if (!response.ok) {
@@ -111,33 +113,30 @@ export class BitriseClient {
 
       const data = (await response.json()) as CheckUpdateResponse
 
-      // No update available
-      if (!data.updateInfo || !data.updateInfo.isAvailable) {
+      // No update available (snake_case fields from server)
+      if (!data.update_info || !data.update_info.is_available) {
         return { remotePackage: null, binaryVersionMismatch: false }
       }
 
-      const updateInfo = data.updateInfo
+      const updateInfo = data.update_info
 
-      // Create RemotePackage instance
+      // Create RemotePackage instance (map snake_case to camelCase)
       const remotePackage = new RemotePackageImpl({
-        appVersion: updateInfo.appVersion,
+        appVersion: updateInfo.target_binary_range,
         deploymentKey: this.deploymentKey,
         description: updateInfo.description || '',
         failedInstall: false,
         isFirstRun: false,
-        isMandatory: updateInfo.isMandatory,
+        isMandatory: updateInfo.is_mandatory,
         isPending: false,
         label: updateInfo.label,
-        packageHash: updateInfo.packageHash,
-        packageSize: updateInfo.packageSize,
-        downloadUrl: updateInfo.downloadUrl,
-        // Pass differential update info if available from server
-        diffUrl: updateInfo.diffUrl,
-        diffSize: updateInfo.diffSize,
+        packageHash: updateInfo.package_hash,
+        packageSize: updateInfo.package_size,
+        downloadUrl: updateInfo.download_url,
       })
 
       // Check if binary version matches
-      if (updateInfo.shouldRunBinaryVersion || updateInfo.updateAppVersion) {
+      if (updateInfo.should_run_binary_version || updateInfo.update_app_version) {
         // Binary update required - return package with mismatch flag
         return { remotePackage, binaryVersionMismatch: true }
       }

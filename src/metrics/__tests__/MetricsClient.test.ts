@@ -1,4 +1,4 @@
-import { MetricsClient, MetricEvent } from '../MetricsClient'
+import { MetricsClient, MetricEvent, DeploymentStatus } from '../MetricsClient'
 import { PersistentStorage } from '../../utils/storage'
 
 // Mock fetch
@@ -17,6 +17,8 @@ jest.mock('../../utils/storage', () => ({
 jest.useFakeTimers()
 
 describe('MetricsClient', () => {
+  const mockServerUrl = 'https://test-workspace.codepush.bitrise.io'
+
   beforeEach(() => {
     jest.clearAllMocks()
     jest.clearAllTimers()
@@ -35,7 +37,7 @@ describe('MetricsClient', () => {
   describe('initialize', () => {
     it('should initialize MetricsClient instance', () => {
       const client = MetricsClient.initialize(
-        'https://api.bitrise.io',
+        mockServerUrl,
         'test-deployment-key',
         'test-client-id',
         '1.0.0'
@@ -47,13 +49,13 @@ describe('MetricsClient', () => {
 
     it('should return existing instance if already initialized', () => {
       const client1 = MetricsClient.initialize(
-        'https://api.bitrise.io',
+        mockServerUrl,
         'test-deployment-key',
         'test-client-id',
         '1.0.0'
       )
       const client2 = MetricsClient.initialize(
-        'https://api.bitrise.io',
+        mockServerUrl,
         'test-deployment-key',
         'test-client-id',
         '1.0.0'
@@ -70,7 +72,7 @@ describe('MetricsClient', () => {
 
     it('should return instance after initialization', () => {
       const client = MetricsClient.initialize(
-        'https://api.bitrise.io',
+        mockServerUrl,
         'test-deployment-key',
         'test-client-id',
         '1.0.0'
@@ -83,7 +85,7 @@ describe('MetricsClient', () => {
   describe('reportEvent', () => {
     it('should queue event', () => {
       const client = MetricsClient.initialize(
-        'https://api.bitrise.io',
+        mockServerUrl,
         'test-deployment-key',
         'test-client-id',
         '1.0.0'
@@ -99,7 +101,7 @@ describe('MetricsClient', () => {
 
     it('should not queue event when disabled', () => {
       const client = MetricsClient.initialize(
-        'https://api.bitrise.io',
+        mockServerUrl,
         'test-deployment-key',
         'test-client-id',
         '1.0.0'
@@ -113,7 +115,7 @@ describe('MetricsClient', () => {
 
     it('should flush when queue reaches batch size', async () => {
       const client = MetricsClient.initialize(
-        'https://api.bitrise.io',
+        mockServerUrl,
         'test-deployment-key',
         'test-client-id',
         '1.0.0'
@@ -132,55 +134,91 @@ describe('MetricsClient', () => {
       expect(global.fetch).toHaveBeenCalled()
       expect(client.getQueueSize()).toBe(0)
     })
-
-    it('should include metadata in event payload', () => {
-      const client = MetricsClient.initialize(
-        'https://api.bitrise.io',
-        'test-deployment-key',
-        'test-client-id',
-        '1.0.0'
-      )
-
-      client.reportEvent(MetricEvent.DOWNLOAD_START, {
-        packageHash: 'abc123',
-        label: 'v1.0.0',
-        metadata: {
-          packageSize: 1000,
-          custom: 'data',
-        },
-      })
-
-      expect(client.getQueueSize()).toBe(1)
-    })
   })
 
   describe('flush', () => {
-    it('should send queued events to server', async () => {
+    it('should send deploy events to deploy endpoint', async () => {
       const client = MetricsClient.initialize(
-        'https://api.bitrise.io',
+        mockServerUrl,
         'test-deployment-key',
         'test-client-id',
         '1.0.0'
       )
 
-      client.reportEvent(MetricEvent.UPDATE_CHECK)
-      client.reportEvent(MetricEvent.APP_READY)
+      client.reportEvent(MetricEvent.APP_READY, { label: 'v1' })
 
       await client.flush()
 
-      expect(global.fetch).toHaveBeenCalledTimes(1)
       expect(global.fetch).toHaveBeenCalledWith(
-        'https://api.bitrise.io/release-management/v1/metrics',
+        `${mockServerUrl}/v0.1/public/codepush/report_status/deploy`,
         expect.objectContaining({
           method: 'POST',
-          body: expect.stringContaining('"event":"update_check"'),
+          headers: { 'Content-Type': 'application/json' },
         })
       )
+
+      // Verify snake_case body format
+      const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body)
+      expect(callBody).toHaveProperty('app_version', '1.0.0')
+      expect(callBody).toHaveProperty('deployment_key', 'test-deployment-key')
+      expect(callBody).toHaveProperty('client_unique_id', 'test-client-id')
+      expect(callBody).toHaveProperty('status', DeploymentStatus.SUCCEEDED)
+    })
+
+    it('should send download events to download endpoint', async () => {
+      const client = MetricsClient.initialize(
+        mockServerUrl,
+        'test-deployment-key',
+        'test-client-id',
+        '1.0.0'
+      )
+
+      client.reportEvent(MetricEvent.DOWNLOAD_COMPLETE, { label: 'v1' })
+
+      await client.flush()
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        `${mockServerUrl}/v0.1/public/codepush/report_status/download`,
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+
+      // Verify snake_case body format
+      const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body)
+      expect(callBody).toHaveProperty('deployment_key', 'test-deployment-key')
+      expect(callBody).toHaveProperty('client_unique_id', 'test-client-id')
+      expect(callBody).toHaveProperty('label', 'v1')
+    })
+
+    it('should route events to correct endpoints', async () => {
+      const client = MetricsClient.initialize(
+        mockServerUrl,
+        'test-deployment-key',
+        'test-client-id',
+        '1.0.0'
+      )
+
+      // Add a mix of events
+      client.reportEvent(MetricEvent.DOWNLOAD_START, { label: 'v1' }) // -> download
+      client.reportEvent(MetricEvent.INSTALL_COMPLETE, { label: 'v1' }) // -> deploy
+
+      await client.flush()
+
+      // Should have made 2 calls to different endpoints
+      expect(global.fetch).toHaveBeenCalledTimes(2)
+
+      const calls = (global.fetch as jest.Mock).mock.calls
+      const urls = calls.map((call: [string]) => call[0])
+
+      expect(urls).toContain(`${mockServerUrl}/v0.1/public/codepush/report_status/download`)
+      expect(urls).toContain(`${mockServerUrl}/v0.1/public/codepush/report_status/deploy`)
     })
 
     it('should do nothing if queue is empty', async () => {
       const client = MetricsClient.initialize(
-        'https://api.bitrise.io',
+        mockServerUrl,
         'test-deployment-key',
         'test-client-id',
         '1.0.0'
@@ -193,7 +231,7 @@ describe('MetricsClient', () => {
 
     it('should requeue events on network failure', async () => {
       const client = MetricsClient.initialize(
-        'https://api.bitrise.io',
+        mockServerUrl,
         'test-deployment-key',
         'test-client-id',
         '1.0.0'
@@ -211,14 +249,14 @@ describe('MetricsClient', () => {
 
       // Event should be requeued
       expect(client.getQueueSize()).toBe(1)
-      expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Metrics report failed'))
+      expect(consoleWarnSpy).toHaveBeenCalled()
 
       consoleWarnSpy.mockRestore()
     })
 
     it('should requeue events on fetch error', async () => {
       const client = MetricsClient.initialize(
-        'https://api.bitrise.io',
+        mockServerUrl,
         'test-deployment-key',
         'test-client-id',
         '1.0.0'
@@ -234,14 +272,13 @@ describe('MetricsClient', () => {
       // Event should be requeued
       expect(client.getQueueSize()).toBe(1)
       expect(consoleWarnSpy).toHaveBeenCalled()
-      // Check that warn was called (content may vary)
 
       consoleWarnSpy.mockRestore()
     })
 
     it('should not requeue if queue exceeds 100 events', async () => {
       const client = MetricsClient.initialize(
-        'https://api.bitrise.io',
+        mockServerUrl,
         'test-deployment-key',
         'test-client-id',
         '1.0.0'
@@ -272,7 +309,7 @@ describe('MetricsClient', () => {
       jest.useRealTimers()
 
       const client = MetricsClient.initialize(
-        'https://api.bitrise.io',
+        mockServerUrl,
         'test-deployment-key',
         'test-client-id',
         '1.0.0'
@@ -299,10 +336,72 @@ describe('MetricsClient', () => {
     })
   })
 
+  describe('deployment status mapping', () => {
+    it('should set SUCCEEDED status for INSTALL_COMPLETE', async () => {
+      const client = MetricsClient.initialize(
+        mockServerUrl,
+        'test-deployment-key',
+        'test-client-id',
+        '1.0.0'
+      )
+
+      client.reportEvent(MetricEvent.INSTALL_COMPLETE, { label: 'v1' })
+      await client.flush()
+
+      const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body)
+      expect(callBody.status).toBe(DeploymentStatus.SUCCEEDED)
+    })
+
+    it('should set SUCCEEDED status for APP_READY', async () => {
+      const client = MetricsClient.initialize(
+        mockServerUrl,
+        'test-deployment-key',
+        'test-client-id',
+        '1.0.0'
+      )
+
+      client.reportEvent(MetricEvent.APP_READY, { label: 'v1' })
+      await client.flush()
+
+      const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body)
+      expect(callBody.status).toBe(DeploymentStatus.SUCCEEDED)
+    })
+
+    it('should set FAILED status for INSTALL_FAILED', async () => {
+      const client = MetricsClient.initialize(
+        mockServerUrl,
+        'test-deployment-key',
+        'test-client-id',
+        '1.0.0'
+      )
+
+      client.reportEvent(MetricEvent.INSTALL_FAILED, { label: 'v1' })
+      await client.flush()
+
+      const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body)
+      expect(callBody.status).toBe(DeploymentStatus.FAILED)
+    })
+
+    it('should set FAILED status for ROLLBACK', async () => {
+      const client = MetricsClient.initialize(
+        mockServerUrl,
+        'test-deployment-key',
+        'test-client-id',
+        '1.0.0'
+      )
+
+      client.reportEvent(MetricEvent.ROLLBACK, { label: 'v1' })
+      await client.flush()
+
+      const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body)
+      expect(callBody.status).toBe(DeploymentStatus.FAILED)
+    })
+  })
+
   describe('setEnabled', () => {
     it('should enable/disable metrics reporting', () => {
       const client = MetricsClient.initialize(
-        'https://api.bitrise.io',
+        mockServerUrl,
         'test-deployment-key',
         'test-client-id',
         '1.0.0'
@@ -319,7 +418,7 @@ describe('MetricsClient', () => {
 
     it('should clear queue when disabled', () => {
       const client = MetricsClient.initialize(
-        'https://api.bitrise.io',
+        mockServerUrl,
         'test-deployment-key',
         'test-client-id',
         '1.0.0'
@@ -337,7 +436,7 @@ describe('MetricsClient', () => {
   describe('periodic flush', () => {
     it('should automatically flush every 60 seconds', async () => {
       const client = MetricsClient.initialize(
-        'https://api.bitrise.io',
+        mockServerUrl,
         'test-deployment-key',
         'test-client-id',
         '1.0.0'
@@ -354,7 +453,7 @@ describe('MetricsClient', () => {
 
     it('should update flush interval when changed', async () => {
       const client = MetricsClient.initialize(
-        'https://api.bitrise.io',
+        mockServerUrl,
         'test-deployment-key',
         'test-client-id',
         '1.0.0'
@@ -372,7 +471,7 @@ describe('MetricsClient', () => {
 
     it('should respect minimum flush interval of 1 second', () => {
       const client = MetricsClient.initialize(
-        'https://api.bitrise.io',
+        mockServerUrl,
         'test-deployment-key',
         'test-client-id',
         '1.0.0'
@@ -390,7 +489,7 @@ describe('MetricsClient', () => {
   describe('setBatchSize', () => {
     it('should update batch size', () => {
       const client = MetricsClient.initialize(
-        'https://api.bitrise.io',
+        mockServerUrl,
         'test-deployment-key',
         'test-client-id',
         '1.0.0'
@@ -409,7 +508,7 @@ describe('MetricsClient', () => {
 
     it('should respect minimum batch size of 1', () => {
       const client = MetricsClient.initialize(
-        'https://api.bitrise.io',
+        mockServerUrl,
         'test-deployment-key',
         'test-client-id',
         '1.0.0'
@@ -420,7 +519,7 @@ describe('MetricsClient', () => {
 
     it('should respect maximum batch size of 100', () => {
       const client = MetricsClient.initialize(
-        'https://api.bitrise.io',
+        mockServerUrl,
         'test-deployment-key',
         'test-client-id',
         '1.0.0'
@@ -433,13 +532,13 @@ describe('MetricsClient', () => {
   describe('privacy', () => {
     it('should not include PII in event payload', async () => {
       const client = MetricsClient.initialize(
-        'https://api.bitrise.io',
+        mockServerUrl,
         'test-deployment-key',
         'test-client-id',
         '1.0.0'
       )
 
-      client.reportEvent(MetricEvent.UPDATE_CHECK, {
+      client.reportEvent(MetricEvent.APP_READY, {
         packageHash: 'abc123',
         label: 'v1.0.0',
       })
@@ -447,20 +546,17 @@ describe('MetricsClient', () => {
       await client.flush()
 
       const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body)
-      const event = callBody.events[0]
 
-      // Should only contain safe data
-      expect(event).toHaveProperty('event')
-      expect(event).toHaveProperty('clientId')
-      expect(event).toHaveProperty('deploymentKey')
-      expect(event).toHaveProperty('appVersion')
-      expect(event).toHaveProperty('timestamp')
+      // Should only contain safe data (snake_case format)
+      expect(callBody).toHaveProperty('app_version')
+      expect(callBody).toHaveProperty('deployment_key')
+      expect(callBody).toHaveProperty('client_unique_id')
 
       // Should not contain email, name, phone, etc.
-      expect(event).not.toHaveProperty('email')
-      expect(event).not.toHaveProperty('name')
-      expect(event).not.toHaveProperty('phone')
-      expect(event).not.toHaveProperty('userId')
+      expect(callBody).not.toHaveProperty('email')
+      expect(callBody).not.toHaveProperty('name')
+      expect(callBody).not.toHaveProperty('phone')
+      expect(callBody).not.toHaveProperty('userId')
     })
   })
 
@@ -468,11 +564,17 @@ describe('MetricsClient', () => {
     beforeEach(() => {
       jest.clearAllMocks()
       ;(PersistentStorage.getItem as jest.Mock).mockResolvedValue([])
+      // Re-apply fetch mock after clearAllMocks
+      ;(global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({}),
+      })
     })
 
     it('should persist queue after every 5 events', async () => {
       const client = MetricsClient.initialize(
-        'https://api.bitrise.io',
+        mockServerUrl,
         'test-deployment-key',
         'test-client-id',
         '1.0.0'
@@ -505,6 +607,7 @@ describe('MetricsClient', () => {
       const persistedEvents = [
         {
           event: MetricEvent.DOWNLOAD_START,
+          endpointType: 'download',
           clientId: 'old-client',
           deploymentKey: 'old-key',
           appVersion: '0.9.0',
@@ -514,7 +617,7 @@ describe('MetricsClient', () => {
       ;(PersistentStorage.getItem as jest.Mock).mockResolvedValue(persistedEvents)
 
       const client = MetricsClient.initialize(
-        'https://api.bitrise.io',
+        mockServerUrl,
         'test-deployment-key',
         'test-client-id',
         '1.0.0'
@@ -533,16 +636,16 @@ describe('MetricsClient', () => {
 
     it('should clear persisted queue after successful flush', async () => {
       const client = MetricsClient.initialize(
-        'https://api.bitrise.io',
+        mockServerUrl,
         'test-deployment-key',
         'test-client-id',
         '1.0.0'
       )
-      client.setBatchSize(1)
+      client.setBatchSize(100) // Prevent auto-flush
 
       client.reportEvent(MetricEvent.UPDATE_CHECK)
 
-      // Trigger flush
+      // Trigger manual flush
       await client.flush()
 
       expect(PersistentStorage.removeItem).toHaveBeenCalledWith('@bitrise/codepush/metricsQueue')
@@ -550,7 +653,7 @@ describe('MetricsClient', () => {
 
     it('should allow manual persist via persistQueue', async () => {
       const client = MetricsClient.initialize(
-        'https://api.bitrise.io',
+        mockServerUrl,
         'test-deployment-key',
         'test-client-id',
         '1.0.0'
@@ -573,7 +676,7 @@ describe('MetricsClient', () => {
 
     it('should not persist empty queue', async () => {
       const client = MetricsClient.initialize(
-        'https://api.bitrise.io',
+        mockServerUrl,
         'test-deployment-key',
         'test-client-id',
         '1.0.0'

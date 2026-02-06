@@ -38,10 +38,13 @@ yarn add @bitrise/react-native-sdk
 ```typescript
 import { BitriseSDK } from '@bitrise/react-native-sdk'
 
-// Configure the SDK
+// Configure the SDK with your workspace slug
+// The SDK constructs the server URL as: https://{workspaceSlug}.codepush.bitrise.io
 BitriseSDK.configure({
   apiToken: 'your-bitrise-api-token',
-  appSlug: 'your-app-slug'
+  appSlug: 'your-app-slug',
+  workspaceSlug: 'your-workspace-slug', // Required for CodePush
+  deploymentKey: 'your-deployment-key',
 })
 
 // Check for updates
@@ -53,6 +56,8 @@ if (update) {
 // Sync with latest update
 const status = await BitriseSDK.codePush.sync()
 ```
+
+> **Finding your workspace slug:** Your workspace slug is visible in your Bitrise dashboard URL. See the [Bitrise CodePush documentation](https://docs.bitrise.io/en/release-management/codepush/configuring-your-app-for-codepush.html) for details.
 
 ## New Features
 
@@ -153,11 +158,11 @@ npm install @bitrise/react-native-sdk
         {
           "ios": {
             "deploymentKey": "YOUR_IOS_DEPLOYMENT_KEY",
-            "serverUrl": "https://api.bitrise.io"
+            "serverUrl": "https://YOUR_WORKSPACE_SLUG.codepush.bitrise.io"
           },
           "android": {
             "deploymentKey": "YOUR_ANDROID_DEPLOYMENT_KEY",
-            "serverUrl": "https://api.bitrise.io"
+            "serverUrl": "https://YOUR_WORKSPACE_SLUG.codepush.bitrise.io"
           }
         }
       ]
@@ -165,6 +170,8 @@ npm install @bitrise/react-native-sdk
   }
 }
 ```
+
+> **Note:** Replace `YOUR_WORKSPACE_SLUG` with your Bitrise workspace slug.
 
 3. **Run prebuild to generate native code:**
 
@@ -189,6 +196,10 @@ BitriseSDK.configure({
 For different environments (development, staging, production), use `app.config.js`:
 
 ```javascript
+// Server URL format: https://{workspaceSlug}.codepush.bitrise.io
+const workspaceSlug = process.env.BITRISE_WORKSPACE_SLUG || 'your-workspace-slug'
+const serverUrl = `https://${workspaceSlug}.codepush.bitrise.io`
+
 module.exports = ({ config }) => ({
   ...config,
   plugins: [
@@ -197,11 +208,11 @@ module.exports = ({ config }) => ({
       {
         ios: {
           deploymentKey: process.env.BITRISE_IOS_DEPLOYMENT_KEY,
-          serverUrl: process.env.BITRISE_SERVER_URL || 'https://api.bitrise.io',
+          serverUrl,
         },
         android: {
           deploymentKey: process.env.BITRISE_ANDROID_DEPLOYMENT_KEY,
-          serverUrl: process.env.BITRISE_SERVER_URL || 'https://api.bitrise.io',
+          serverUrl,
         },
       },
     ],

@@ -23,7 +23,7 @@ describe('BitriseSDK', () => {
       expect(BitriseSDK.getConfig()).toEqual({
         ...config,
         apiEndpoint: 'https://api.bitrise.io/v0.1',
-        serverUrl: 'https://api.bitrise.io',
+        serverUrl: undefined, // No default serverUrl without workspaceSlug
       })
     })
 
@@ -66,12 +66,13 @@ describe('BitriseSDK', () => {
       expect(() => BitriseSDK.configure(config)).toThrow('appSlug is required and cannot be empty')
     })
 
-    it('should accept deploymentKey in config', () => {
+    it('should accept deploymentKey with workspaceSlug', () => {
       // Arrange
       const config = {
         apiToken: 'test-token',
         appSlug: 'test-slug',
         deploymentKey: 'test-deployment-key',
+        workspaceSlug: 'test-workspace',
       }
 
       // Act
@@ -107,6 +108,86 @@ describe('BitriseSDK', () => {
 
       // Assert
       expect(BitriseSDK.getConfig().serverUrl).toBe('https://custom.server.url')
+    })
+
+    describe('workspaceSlug', () => {
+      it('should construct serverUrl from workspaceSlug', () => {
+        // Arrange
+        const config = {
+          apiToken: 'test-token',
+          appSlug: 'test-slug',
+          workspaceSlug: 'my-workspace',
+        }
+
+        // Act
+        BitriseSDK.configure(config)
+
+        // Assert
+        expect(BitriseSDK.getConfig().serverUrl).toBe('https://my-workspace.codepush.bitrise.io')
+      })
+
+      it('should throw ConfigurationError if workspaceSlug is empty string', () => {
+        // Arrange
+        const config = {
+          apiToken: 'test-token',
+          appSlug: 'test-slug',
+          workspaceSlug: '',
+        }
+
+        // Act & Assert
+        expect(() => BitriseSDK.configure(config)).toThrow(ConfigurationError)
+        expect(() => BitriseSDK.configure(config)).toThrow(
+          'workspaceSlug must be a non-empty string'
+        )
+      })
+
+      it('should prioritize workspaceSlug over explicit serverUrl', () => {
+        // Arrange
+        const config = {
+          apiToken: 'test-token',
+          appSlug: 'test-slug',
+          workspaceSlug: 'my-workspace',
+          serverUrl: 'https://explicit.url.com',
+        }
+
+        // Act
+        BitriseSDK.configure(config)
+
+        // Assert - workspaceSlug should take precedence
+        expect(BitriseSDK.getConfig().serverUrl).toBe('https://my-workspace.codepush.bitrise.io')
+      })
+
+      it('should throw if deploymentKey provided without workspaceSlug or serverUrl', () => {
+        // Arrange
+        const config = {
+          apiToken: 'test-token',
+          appSlug: 'test-slug',
+          deploymentKey: 'test-key',
+        }
+
+        // Act & Assert
+        expect(() => BitriseSDK.configure(config)).toThrow(ConfigurationError)
+        expect(() => BitriseSDK.configure(config)).toThrow(
+          'workspaceSlug is required when using CodePush'
+        )
+      })
+
+      it('should allow deploymentKey with serverUrl (no workspaceSlug)', () => {
+        // Arrange
+        const config = {
+          apiToken: 'test-token',
+          appSlug: 'test-slug',
+          deploymentKey: 'test-key',
+          serverUrl: 'https://custom.codepush.server.io',
+        }
+
+        // Act
+        BitriseSDK.configure(config)
+
+        // Assert
+        expect(BitriseSDK.getConfig().serverUrl).toBe('https://custom.codepush.server.io')
+        expect(BitriseSDK.getConfig().deploymentKey).toBe('test-key')
+      })
     })
   })
 

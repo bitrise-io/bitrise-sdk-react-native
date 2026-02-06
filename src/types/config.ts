@@ -25,8 +25,18 @@ export interface BitriseConfig {
   deploymentKey?: string
 
   /**
+   * Bitrise workspace slug for CodePush server
+   * The SDK will construct the server URL as: https://{workspaceSlug}.codepush.bitrise.io
+   *
+   * You can find your workspace slug in the Bitrise dashboard URL or
+   * by following: https://docs.bitrise.io/en/release-management/codepush/configuring-your-app-for-codepush.html
+   */
+  workspaceSlug?: string
+
+  /**
    * Optional: Custom CodePush server URL
-   * @default 'https://api.bitrise.io'
+   * If not provided, will be constructed from workspaceSlug
+   * @deprecated Use workspaceSlug instead for automatic URL construction
    */
   serverUrl?: string
 }
