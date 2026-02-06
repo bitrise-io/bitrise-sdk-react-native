@@ -6,11 +6,13 @@ yarn-error.log*
 
 # Build output
 lib/
+plugin/build/
 *.tgz
 
 # IDE
 .vscode/
 .idea/
+.claude/
 *.swp
 *.swo
 *~
