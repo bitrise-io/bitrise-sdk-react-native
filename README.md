@@ -1,5 +1,11 @@
 # Bitrise SDK for React Native
 
+[![npm version](https://img.shields.io/npm/v/@bitrise/react-native-sdk.svg)](https://www.npmjs.com/package/@bitrise/react-native-sdk)
+[![license](https://img.shields.io/npm/l/@bitrise/react-native-sdk.svg)](https://github.com/bitrise-io/bitrise-sdk-react-native/blob/main/LICENSE)
+[![coverage](https://img.shields.io/badge/coverage-94%25-brightgreen.svg)](https://github.com/bitrise-io/bitrise-sdk-react-native)
+[![platforms](https://img.shields.io/badge/platforms-iOS%20%7C%20Android-lightgrey.svg)](https://github.com/bitrise-io/bitrise-sdk-react-native)
+[![expo](https://img.shields.io/badge/Expo-SDK%2050%2B-blue.svg)](https://expo.dev)
+
 Lightweight React Native SDK for Bitrise Release Management with code push functionality.
 
 ## Features
@@ -8,7 +14,7 @@ Lightweight React Native SDK for Bitrise Release Management with code push funct
 - 📦 Minimal bundle size impact (~53 KB)
 - 🔄 Backward compatible with react-native-code-push
 - ⚡ Support for Expo managed and bare workflows
-- 🧪 Production-ready with comprehensive tests (88% coverage)
+- 🧪 Production-ready with comprehensive tests (94% coverage)
 - 📱 iOS and Android support
 - 💾 **Native filesystem storage** - No 50 MB package size limit
 - 🔁 **Smart download queue** - Automatic sequential processing with retry logic
@@ -280,70 +286,14 @@ Notify the SDK that the app has successfully launched.
 
 ### Download Queue API
 
-#### `DownloadQueue.getInstance(config?)`
+The SDK includes a smart download queue for managing concurrent downloads. See [full API reference](./docs/api-reference.md) for detailed documentation.
 
-Get the download queue singleton instance.
-
-**Parameters:**
-- `config.maxRetries` (number, optional) - Maximum retry attempts (default: 3)
-- `config.baseRetryDelay` (number, optional) - Base delay for retries in ms (default: 1000)
-- `config.maxRetryDelay` (number, optional) - Maximum retry delay cap in ms (default: 30000)
-- `config.debug` (boolean, optional) - Enable debug logging (default: false)
-
-**Returns:** `DownloadQueue`
-
-#### `queue.getStatistics()`
-
-Get download queue statistics.
-
-**Returns:** `QueueStatistics`
-
-```typescript
-{
-  totalDownloads: number
-  successfulDownloads: number
-  failedDownloads: number
-  cancelledDownloads: number
-  averageWaitTime: number        // in milliseconds
-  averageDownloadTime: number    // in milliseconds
-  totalBytesDownloaded: number
-  currentQueueSize: number
-  maxQueueSize: number
-  successRate: number            // 0-1
-}
-```
-
-#### `queue.getState()`
-
-Get current queue state.
-
-**Returns:** `QueueState`
-
-```typescript
-{
-  status: 'idle' | 'downloading' | 'paused'
-  currentItem: QueueItem | null
-  queuedItems: QueueItem[]
-  totalItems: number
-}
-```
-
-#### `queue.pause()` / `queue.resume()` / `queue.clear()`
-
-Control queue processing.
-
-#### Queue Events
-
-Subscribe to queue events using `queue.on(event, callback)`:
-
-- `QueueEvent.ITEM_ADDED` - Item added to queue
-- `QueueEvent.DOWNLOAD_STARTED` - Download started
-- `QueueEvent.DOWNLOAD_PROGRESS` - Progress update
-- `QueueEvent.DOWNLOAD_COMPLETED` - Download completed successfully
-- `QueueEvent.DOWNLOAD_FAILED` - Download failed
-- `QueueEvent.ITEM_CANCELLED` - Item cancelled
-- `QueueEvent.QUEUE_EMPTIED` - Queue is now empty
-- `QueueEvent.STATUS_CHANGED` - Queue status changed
+**Quick reference:**
+- `DownloadQueue.getInstance(config?)` - Get queue instance
+- `queue.getStatistics()` - Get download stats (success rate, avg time)
+- `queue.getState()` - Get current queue state
+- `queue.pause()` / `queue.resume()` / `queue.clear()` - Control queue
+- `queue.on(event, callback)` - Subscribe to events
 
 ## Troubleshooting
 
@@ -495,13 +445,20 @@ npm run build
 - Node >= 18.0.0
 - TypeScript >= 5.0.0
 
+## Compatibility
+
+| SDK Version | React Native | Expo SDK | Node |
+|-------------|--------------|----------|------|
+| 0.2.x       | 0.72+        | 50+      | 18+  |
+| 0.1.x       | 0.72+        | 50+      | 18+  |
+
 ## License
 
 MIT
 
 ## Contributing
 
-Contributions are welcome! Please read our contributing guidelines and code of conduct.
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup and guidelines.
 
 ## Support
 
