@@ -520,7 +520,7 @@ Need help with migration?
 
 - GitHub Issues: https://github.com/bitrise-io/bitrise-sdk-react-native/issues
 - Documentation: [expo-configuration.md](./expo-configuration.md)
-- Example App: [example-expo/](../example-expo/)
+- Example App: [examples/expo/](../examples/expo/)
 
 ## Additional Resources
 

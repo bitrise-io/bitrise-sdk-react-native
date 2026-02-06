@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# iOS
+ios/Pods/
+ios/build/
+*.xcworkspace
+*.xcuserstate
+
+# Android
+android/.gradle/
+android/app/build/
+android/build/
+*.apk
+*.aab
+
+# Metro
+.metro-health-check*
+
+# Misc
+.DS_Store
+*.log

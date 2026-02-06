@@ -4,7 +4,7 @@ default_step_lib_source: https://github.com/bitrise-io/bitrise-steplib.git
 
 app:
   envs:
-  - BITRISE_PROJECT_PATH: example-expo
+  - BITRISE_PROJECT_PATH: examples/expo
   - EXPO_CLI_VERSION: latest
 
 workflows:
@@ -21,7 +21,7 @@ workflows:
         - content: |-
             #!/usr/bin/env bash
             set -ex
-            cd example-expo
+            cd examples/expo
             npm install
     - script@1:
         title: Run Expo prebuild
@@ -29,7 +29,7 @@ workflows:
         - content: |-
             #!/usr/bin/env bash
             set -ex
-            cd example-expo
+            cd examples/expo
             npx expo prebuild --clean
     - script@1:
         title: Verify native configuration
@@ -37,7 +37,7 @@ workflows:
         - content: |-
             #!/usr/bin/env bash
             set -ex
-            cd example-expo
+            cd examples/expo
 
             # Verify iOS Info.plist has deployment key
             if [ -f "ios/bitriseSDKexpoexample/Info.plist" ]; then
@@ -75,7 +75,7 @@ workflows:
         - content: |-
             #!/usr/bin/env bash
             set -ex
-            cd example-expo
+            cd examples/expo
             npm install
     - script@1:
         title: Run Expo prebuild
@@ -83,11 +83,11 @@ workflows:
         - content: |-
             #!/usr/bin/env bash
             set -ex
-            cd example-expo
+            cd examples/expo
             npx expo prebuild --platform ios --clean
     - xcode-build-for-simulator@0:
         inputs:
-        - project_path: example-expo/ios/bitriseSDKexpoexample.xcworkspace
+        - project_path: examples/expo/ios/bitriseSDKexpoexample.xcworkspace
         - scheme: bitriseSDKexpoexample
         - simulator_device: iPhone 14
     - deploy-to-bitrise-io@2: {}
@@ -104,7 +104,7 @@ workflows:
         - content: |-
             #!/usr/bin/env bash
             set -ex
-            cd example-expo
+            cd examples/expo
             npm install
     - script@1:
         title: Run Expo prebuild
@@ -112,11 +112,11 @@ workflows:
         - content: |-
             #!/usr/bin/env bash
             set -ex
-            cd example-expo
+            cd examples/expo
             npx expo prebuild --platform android --clean
     - android-build@1:
         inputs:
-        - project_location: example-expo/android
+        - project_location: examples/expo/android
         - module: app
         - variant: debug
     - deploy-to-bitrise-io@2: {}
@@ -134,7 +134,7 @@ workflows:
             #!/usr/bin/env bash
             set -ex
             npm install -g eas-cli
-            cd example-expo
+            cd examples/expo
             npm install
     - script@1:
         title: EAS Build
@@ -142,7 +142,7 @@ workflows:
         - content: |-
             #!/usr/bin/env bash
             set -ex
-            cd example-expo
+            cd examples/expo
 
             # Login to EAS (requires EXPO_TOKEN environment variable)
             eas build --profile preview --platform all --non-interactive

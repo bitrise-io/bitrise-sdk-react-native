@@ -25,7 +25,7 @@ This example app demonstrates how to integrate the Bitrise React Native SDK with
 ### 1. Install Dependencies
 
 ```bash
-cd example-expo
+cd examples/expo
 npm install
 ```
 
@@ -335,7 +335,7 @@ npm start -- --clear
 ## Project Structure
 
 ```
-example-expo/
+examples/expo/
 ├── App.tsx                 # Main app component with CodePush integration
 ├── app.json               # Static Expo configuration
 ├── app.config.js          # Dynamic Expo configuration (environment variables)

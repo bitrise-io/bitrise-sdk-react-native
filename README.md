@@ -248,14 +248,18 @@ eas build --profile production --platform all
 ❌ **Not Supported:**
 - Expo Go (requires custom native code)
 
-### Example App
+### Example Apps
 
-See the [example-expo](./example-expo) directory for a complete working example with:
-- CodePush integration
-- Progress tracking
-- Update dialogs
-- EAS Build configuration
-- Bitrise CI/CD workflow
+See the [examples](./examples) directory for complete working examples:
+
+- **[Expo Example](./examples/expo)** - Expo managed workflow with config plugin
+- **[React Native Example](./examples/react-native)** - Bare React Native setup
+
+Both examples demonstrate:
+- CodePush integration and sync operations
+- Progress tracking and status callbacks
+- Update dialogs and install modes
+- Error handling patterns
 
 ## API Reference
 
