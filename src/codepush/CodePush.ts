@@ -6,10 +6,13 @@ import type {
   Configuration,
   Package,
   UpdateDialogOptions,
+  SyncStatusChangedCallback,
+  DownloadProgressCallback,
+  HandleBinaryVersionMismatchCallback,
 } from '../types/package'
 import { SyncStatus, UpdateState } from '../types/enums'
 import { ConfigurationError, UpdateError, TimeoutError } from '../types/errors'
-import { BitriseClient } from '../network/BitriseClient'
+import { BitriseClient, CheckUpdateResult } from '../network/BitriseClient'
 import { PackageStorage } from '../storage/PackageStorage'
 import { getAppVersion } from '../utils/platform'
 import { RestartQueue } from './RestartQueue'
@@ -99,6 +102,41 @@ export class CodePush {
   }
 
   /**
+   * Check for available updates with binary version mismatch information
+   * @internal Used by sync() to support mismatch callbacks
+   */
+  private async checkForUpdateWithMismatchInfo(deploymentKey?: string): Promise<CheckUpdateResult> {
+    // Use custom deployment key if provided
+    const client = deploymentKey
+      ? new BitriseClient(
+          this.bitriseConfig.serverUrl || 'https://api.bitrise.io',
+          deploymentKey,
+          getAppVersion()
+        )
+      : this.getClient()
+
+    // Get current package hash
+    const currentPackage = await PackageStorage.getCurrentPackage()
+    const currentHash = currentPackage?.packageHash
+
+    // Check for update with mismatch info
+    const result = await client.checkForUpdateWithMismatchInfo(currentHash)
+
+    // Report UPDATE_CHECK metric
+    MetricsClient.getInstance()?.reportEvent(MetricEvent.UPDATE_CHECK, {
+      packageHash: result.remotePackage?.packageHash,
+      label: result.remotePackage?.label,
+      metadata: {
+        isAvailable: !!result.remotePackage,
+        isMandatory: result.remotePackage?.isMandatory,
+        binaryVersionMismatch: result.binaryVersionMismatch,
+      },
+    })
+
+    return result
+  }
+
+  /**
    * Get the current SDK configuration
    *
    * @returns Configuration object
@@ -168,32 +206,41 @@ export class CodePush {
   }
 
   /**
-   * Show native alert for optional updates
-   * Only called for non-mandatory updates with updateDialog option
+   * Show native alert for updates
+   * For optional updates: shows ignore and install buttons
+   * For mandatory updates: shows only continue button (cannot be dismissed)
    */
   private async showUpdateDialog(
     options: UpdateDialogOptions | boolean,
     remotePackage: RemotePackage
   ): Promise<boolean> {
     const dialogOptions = typeof options === 'boolean' ? {} : options
+    const isMandatory = remotePackage.isMandatory
 
     return new Promise(resolve => {
-      const message = this.buildDialogMessage(dialogOptions, remotePackage)
+      const message = this.buildDialogMessage(dialogOptions, remotePackage, isMandatory)
       const title = dialogOptions.title || 'Update available'
 
-      const buttons = [
-        {
-          text: dialogOptions.optionalIgnoreButtonLabel || 'Not Now',
-          onPress: () => resolve(false),
-          style: 'cancel' as const,
-        },
-        {
-          text: dialogOptions.optionalInstallButtonLabel || 'Install',
-          onPress: () => resolve(true),
-        },
-      ]
+      const buttons = isMandatory
+        ? [
+            {
+              text: dialogOptions.mandatoryContinueButtonLabel || 'Continue',
+              onPress: () => resolve(true),
+            },
+          ]
+        : [
+            {
+              text: dialogOptions.optionalIgnoreButtonLabel || 'Not Now',
+              onPress: () => resolve(false),
+              style: 'cancel' as const,
+            },
+            {
+              text: dialogOptions.optionalInstallButtonLabel || 'Install',
+              onPress: () => resolve(true),
+            },
+          ]
 
-      Alert.alert(title, message, buttons)
+      Alert.alert(title, message, buttons, { cancelable: !isMandatory })
     })
   }
 
@@ -202,10 +249,16 @@ export class CodePush {
    */
   private buildDialogMessage(
     options: Partial<UpdateDialogOptions>,
-    remotePackage: RemotePackage
+    remotePackage: RemotePackage,
+    isMandatory: boolean
   ): string {
-    const baseMessage =
-      options.optionalUpdateMessage || 'An update is available. Would you like to install it?'
+    const defaultMessage = isMandatory
+      ? 'An update is available that must be installed.'
+      : 'An update is available. Would you like to install it?'
+
+    const baseMessage = isMandatory
+      ? options.mandatoryUpdateMessage || defaultMessage
+      : options.optionalUpdateMessage || defaultMessage
 
     if (options.appendReleaseDescription && remotePackage.description) {
       const prefix = options.descriptionPrefix || '\n\nRelease notes:\n'
@@ -228,6 +281,9 @@ export class CodePush {
    * @param options.mandatoryInstallMode - Install mode for mandatory updates (default: IMMEDIATE)
    * @param options.minimumBackgroundDuration - Minimum seconds in background before installing (for ON_NEXT_SUSPEND)
    * @param options.ignoreFailedUpdates - Skip updates that previously failed (default: false)
+   * @param syncStatusChangedCallback - Optional callback for sync status changes
+   * @param downloadProgressCallback - Optional callback for download progress
+   * @param handleBinaryVersionMismatchCallback - Optional callback when binary update is required
    * @returns Promise resolving to SyncStatus indicating the result
    *
    * @example
@@ -241,26 +297,45 @@ export class CodePush {
    *
    * @example
    * ```typescript
-   * // Custom install mode
-   * await codePush.sync({
-   *   installMode: InstallMode.IMMEDIATE,
-   *   mandatoryInstallMode: InstallMode.IMMEDIATE
-   * })
+   * // With callbacks (react-native-code-push compatible)
+   * await codePush.sync(
+   *   { installMode: InstallMode.IMMEDIATE },
+   *   (status) => console.log('Status:', status),
+   *   (progress) => console.log('Progress:', progress.receivedBytes, '/', progress.totalBytes),
+   *   (update) => console.log('Binary update required:', update.appVersion)
+   * )
    * ```
    */
-  async sync(options?: SyncOptions): Promise<SyncStatus> {
+  async sync(
+    options?: SyncOptions,
+    syncStatusChangedCallback?: SyncStatusChangedCallback,
+    downloadProgressCallback?: DownloadProgressCallback,
+    handleBinaryVersionMismatchCallback?: HandleBinaryVersionMismatchCallback
+  ): Promise<SyncStatus> {
     // GUARD: Prevent concurrent syncs
     if (this.isSyncing) {
+      syncStatusChangedCallback?.(SyncStatus.SYNC_IN_PROGRESS)
       return SyncStatus.SYNC_IN_PROGRESS
     }
 
     // Apply timeout if configured (default: 5 minutes, 0 = disabled)
     const timeoutMs = options?.syncTimeoutMs ?? DEFAULT_SYNC_TIMEOUT_MS
     if (timeoutMs > 0) {
-      return this.syncWithTimeout(options, timeoutMs)
+      return this.syncWithTimeout(
+        options,
+        timeoutMs,
+        syncStatusChangedCallback,
+        downloadProgressCallback,
+        handleBinaryVersionMismatchCallback
+      )
     }
 
-    return this.performSync(options)
+    return this.performSync(
+      options,
+      syncStatusChangedCallback,
+      downloadProgressCallback,
+      handleBinaryVersionMismatchCallback
+    )
   }
 
   /**
@@ -268,7 +343,10 @@ export class CodePush {
    */
   private async syncWithTimeout(
     options: SyncOptions | undefined,
-    timeoutMs: number
+    timeoutMs: number,
+    syncStatusChangedCallback?: SyncStatusChangedCallback,
+    downloadProgressCallback?: DownloadProgressCallback,
+    handleBinaryVersionMismatchCallback?: HandleBinaryVersionMismatchCallback
   ): Promise<SyncStatus> {
     return new Promise<SyncStatus>((resolve, reject) => {
       let settled = false
@@ -286,7 +364,12 @@ export class CodePush {
         }
       }, timeoutMs)
 
-      this.performSync(options)
+      this.performSync(
+        options,
+        syncStatusChangedCallback,
+        downloadProgressCallback,
+        handleBinaryVersionMismatchCallback
+      )
         .then(result => {
           if (!settled) {
             settled = true
@@ -307,7 +390,12 @@ export class CodePush {
   /**
    * Perform the actual sync operation
    */
-  private async performSync(options?: SyncOptions): Promise<SyncStatus> {
+  private async performSync(
+    options?: SyncOptions,
+    syncStatusChangedCallback?: SyncStatusChangedCallback,
+    downloadProgressCallback?: DownloadProgressCallback,
+    handleBinaryVersionMismatchCallback?: HandleBinaryVersionMismatchCallback
+  ): Promise<SyncStatus> {
     try {
       this.isSyncing = true
 
@@ -317,9 +405,20 @@ export class CodePush {
       }
 
       // PHASE 2: Check for updates
-      const remotePackage = await this.checkForUpdate(options?.deploymentKey)
+      syncStatusChangedCallback?.(SyncStatus.CHECKING_FOR_UPDATE)
+
+      const updateResult = await this.checkForUpdateWithMismatchInfo(options?.deploymentKey)
+
+      // Handle binary version mismatch
+      if (updateResult.binaryVersionMismatch && updateResult.remotePackage) {
+        handleBinaryVersionMismatchCallback?.(updateResult.remotePackage)
+        return SyncStatus.UP_TO_DATE
+      }
+
+      const remotePackage = updateResult.remotePackage
 
       if (!remotePackage) {
+        syncStatusChangedCallback?.(SyncStatus.UP_TO_DATE)
         return SyncStatus.UP_TO_DATE
       }
 
@@ -330,24 +429,30 @@ export class CodePush {
       if (options?.ignoreFailedUpdates) {
         const failedUpdates = await PackageStorage.getFailedUpdates()
         if (failedUpdates.includes(remotePackage.packageHash)) {
+          syncStatusChangedCallback?.(SyncStatus.UPDATE_IGNORED)
           return SyncStatus.UPDATE_IGNORED
         }
       }
 
       // PHASE 5: Show update dialog if configured
-      if (options?.updateDialog && !remotePackage.isMandatory) {
+      if (options?.updateDialog) {
+        syncStatusChangedCallback?.(SyncStatus.AWAITING_USER_ACTION)
         const userApproved = await this.showUpdateDialog(options.updateDialog, remotePackage)
         if (!userApproved) {
+          syncStatusChangedCallback?.(SyncStatus.UPDATE_IGNORED)
           return SyncStatus.UPDATE_IGNORED
         }
       }
 
       // PHASE 6: Download package
-      const localPackage = await remotePackage.download()
+      syncStatusChangedCallback?.(SyncStatus.DOWNLOADING_PACKAGE)
+      const localPackage = await remotePackage.download(downloadProgressCallback)
 
       // PHASE 7: Install package
+      syncStatusChangedCallback?.(SyncStatus.INSTALLING_UPDATE)
       await localPackage.install(installMode, options?.minimumBackgroundDuration)
 
+      syncStatusChangedCallback?.(SyncStatus.UPDATE_INSTALLED)
       return SyncStatus.UPDATE_INSTALLED
     } catch (error) {
       // Let ConfigurationError and TimeoutError bubble up
@@ -356,6 +461,7 @@ export class CodePush {
       }
 
       console.error('[CodePush] sync() failed:', error)
+      syncStatusChangedCallback?.(SyncStatus.UNKNOWN_ERROR)
       return SyncStatus.UNKNOWN_ERROR
     } finally {
       this.isSyncing = false

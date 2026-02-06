@@ -24,6 +24,22 @@ jest.mock('../../utils/platform', () => ({
   getAppVersion: () => '1.0.0',
 }))
 
+/**
+ * Helper to mock checkForUpdateWithMismatchInfo based on checkForUpdate mock
+ * This ensures sync() works correctly with the new internal API
+ */
+function setupCheckForUpdateMismatchMock() {
+  ;(BitriseClient.prototype.checkForUpdateWithMismatchInfo as jest.Mock).mockImplementation(
+    async function (this: BitriseClient, currentPackageHash?: string) {
+      const result = await (BitriseClient.prototype.checkForUpdate as jest.Mock).call(
+        this,
+        currentPackageHash
+      )
+      return { remotePackage: result, binaryVersionMismatch: false }
+    }
+  )
+}
+
 describe('CodePush', () => {
   const mockConfig: BitriseConfig = {
     apiToken: 'test-token',
@@ -40,6 +56,8 @@ describe('CodePush', () => {
     jest.spyOn(console, 'warn').mockImplementation()
     // Default mock for getFailedUpdates to prevent undefined errors
     ;(PackageStorage.getFailedUpdates as jest.Mock).mockResolvedValue([])
+    // Setup checkForUpdateWithMismatchInfo to wrap checkForUpdate results
+    setupCheckForUpdateMismatchMock()
   })
 
   afterEach(() => {
@@ -611,6 +629,93 @@ describe('CodePush', () => {
         expect(mockLocalPackage.install).toHaveBeenCalledWith(3, 60)
       })
     })
+
+    describe('sync callbacks (react-native-code-push compatible)', () => {
+      it('should call syncStatusChangedCallback with status updates', async () => {
+        mockRemotePackage.download.mockResolvedValue(mockLocalPackage)
+        mockLocalPackage.install.mockResolvedValue(undefined)
+        ;(BitriseClient.prototype.checkForUpdate as jest.Mock).mockResolvedValue(mockRemotePackage)
+
+        const statusCallback = jest.fn()
+
+        await codePush.sync({}, statusCallback)
+
+        expect(statusCallback).toHaveBeenCalledWith(SyncStatus.CHECKING_FOR_UPDATE)
+        expect(statusCallback).toHaveBeenCalledWith(SyncStatus.DOWNLOADING_PACKAGE)
+        expect(statusCallback).toHaveBeenCalledWith(SyncStatus.INSTALLING_UPDATE)
+        expect(statusCallback).toHaveBeenCalledWith(SyncStatus.UPDATE_INSTALLED)
+      })
+
+      it('should call syncStatusChangedCallback with UP_TO_DATE when no update', async () => {
+        ;(BitriseClient.prototype.checkForUpdate as jest.Mock).mockResolvedValue(null)
+
+        const statusCallback = jest.fn()
+
+        await codePush.sync({}, statusCallback)
+
+        expect(statusCallback).toHaveBeenCalledWith(SyncStatus.CHECKING_FOR_UPDATE)
+        expect(statusCallback).toHaveBeenCalledWith(SyncStatus.UP_TO_DATE)
+      })
+
+      it('should call downloadProgressCallback during download', async () => {
+        const progressCallback = jest.fn()
+        mockRemotePackage.download.mockImplementation(async (cb?: (p: unknown) => void) => {
+          cb?.({ receivedBytes: 50, totalBytes: 100 })
+          cb?.({ receivedBytes: 100, totalBytes: 100 })
+          return mockLocalPackage
+        })
+        ;(BitriseClient.prototype.checkForUpdate as jest.Mock).mockResolvedValue(mockRemotePackage)
+
+        await codePush.sync({}, undefined, progressCallback)
+
+        expect(progressCallback).toHaveBeenCalledWith({ receivedBytes: 50, totalBytes: 100 })
+        expect(progressCallback).toHaveBeenCalledWith({ receivedBytes: 100, totalBytes: 100 })
+      })
+
+      it('should call SYNC_IN_PROGRESS callback when sync already running', async () => {
+        ;(BitriseClient.prototype.checkForUpdate as jest.Mock).mockImplementation(
+          () => new Promise(resolve => setTimeout(() => resolve(null), 100))
+        )
+
+        const statusCallback1 = jest.fn()
+        const statusCallback2 = jest.fn()
+
+        const promise1 = codePush.sync({}, statusCallback1)
+        const promise2 = codePush.sync({}, statusCallback2)
+
+        await Promise.all([promise1, promise2])
+
+        expect(statusCallback2).toHaveBeenCalledWith(SyncStatus.SYNC_IN_PROGRESS)
+      })
+    })
+
+    describe('binary version mismatch callback', () => {
+      it('should call handleBinaryVersionMismatchCallback when binary update needed', async () => {
+        const mismatchCallback = jest.fn()
+        const mismatchPackage = { ...mockRemotePackage }
+
+        // Mock checkForUpdateWithMismatchInfo to return binary mismatch
+        ;(BitriseClient.prototype.checkForUpdateWithMismatchInfo as jest.Mock).mockResolvedValue({
+          remotePackage: mismatchPackage,
+          binaryVersionMismatch: true,
+        })
+
+        const status = await codePush.sync({}, undefined, undefined, mismatchCallback)
+
+        expect(mismatchCallback).toHaveBeenCalledWith(mismatchPackage)
+        expect(status).toBe(SyncStatus.UP_TO_DATE)
+        expect(mockRemotePackage.download).not.toHaveBeenCalled()
+      })
+
+      it('should not call mismatchCallback when no binary mismatch', async () => {
+        const mismatchCallback = jest.fn()
+        ;(BitriseClient.prototype.checkForUpdate as jest.Mock).mockResolvedValue(null)
+
+        await codePush.sync({}, undefined, undefined, mismatchCallback)
+
+        expect(mismatchCallback).not.toHaveBeenCalled()
+      })
+    })
   })
 
   describe('notifyAppReady', () => {
@@ -997,7 +1102,8 @@ describe('CodePush', () => {
         expect.arrayContaining([
           expect.objectContaining({ text: 'Not Now', style: 'cancel' }),
           expect.objectContaining({ text: 'Install' }),
-        ])
+        ]),
+        expect.objectContaining({ cancelable: true })
       )
       expect(status).toBe(SyncStatus.UPDATE_INSTALLED)
     })
@@ -1015,16 +1121,25 @@ describe('CodePush', () => {
       expect(mockRemotePackage.download).not.toHaveBeenCalled()
     })
 
-    it('should not show dialog for mandatory updates', async () => {
+    it('should show dialog with only Continue button for mandatory updates', async () => {
       const mandatoryPackage = { ...mockRemotePackage, isMandatory: true }
       ;(BitriseClient.prototype.checkForUpdate as jest.Mock).mockResolvedValue(mandatoryPackage)
       mandatoryPackage.download.mockResolvedValue(mockLocalPackage)
+      ;(Alert.alert as jest.Mock).mockImplementation((_title, _message, buttons) => {
+        // Mandatory dialog has only one button
+        buttons[0].onPress()
+      })
 
       const status = await codePush.sync({
         updateDialog: true,
       })
 
-      expect(Alert.alert).not.toHaveBeenCalled()
+      expect(Alert.alert).toHaveBeenCalledWith(
+        'Update available',
+        'An update is available that must be installed.',
+        expect.arrayContaining([expect.objectContaining({ text: 'Continue' })]),
+        expect.objectContaining({ cancelable: false })
+      )
       expect(status).toBe(SyncStatus.UPDATE_INSTALLED)
     })
 
@@ -1048,7 +1163,8 @@ describe('CodePush', () => {
         expect.arrayContaining([
           expect.objectContaining({ text: 'No', style: 'cancel' }),
           expect.objectContaining({ text: 'Yes' }),
-        ])
+        ]),
+        expect.objectContaining({ cancelable: true })
       )
     })
 
@@ -1066,12 +1182,14 @@ describe('CodePush', () => {
       expect(Alert.alert).toHaveBeenCalledWith(
         'Update available',
         expect.stringContaining('Release notes:'),
-        expect.any(Array)
+        expect.any(Array),
+        expect.any(Object)
       )
       expect(Alert.alert).toHaveBeenCalledWith(
         expect.any(String),
         expect.stringContaining('Bug fixes and improvements'),
-        expect.any(Array)
+        expect.any(Array),
+        expect.any(Object)
       )
     })
 
@@ -1090,7 +1208,8 @@ describe('CodePush', () => {
       expect(Alert.alert).toHaveBeenCalledWith(
         expect.any(String),
         expect.stringContaining("What's new:"),
-        expect.any(Array)
+        expect.any(Array),
+        expect.any(Object)
       )
     })
 
@@ -1106,7 +1225,8 @@ describe('CodePush', () => {
       expect(Alert.alert).toHaveBeenCalledWith(
         'Update available',
         expect.any(String),
-        expect.any(Array)
+        expect.any(Array),
+        expect.any(Object)
       )
     })
 
@@ -1127,7 +1247,8 @@ describe('CodePush', () => {
       expect(Alert.alert).toHaveBeenCalledWith(
         expect.any(String),
         'An update is available. Would you like to install it?',
-        expect.any(Array)
+        expect.any(Array),
+        expect.any(Object)
       )
     })
   })

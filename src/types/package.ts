@@ -129,9 +129,10 @@ export interface UpdateDialogOptions {
   optionalInstallButtonLabel?: string
 
   /**
-   * Text for the mandatory install button
+   * Text for the mandatory continue button
+   * Compatible with react-native-code-push naming
    */
-  mandatoryInstallButtonLabel?: string
+  mandatoryContinueButtonLabel?: string
 
   /**
    * Text for the ignore button (optional updates only)
@@ -235,3 +236,22 @@ export interface Configuration {
    */
   packageHash?: string
 }
+
+/**
+ * Callback for sync status changes
+ * Compatible with react-native-code-push
+ */
+export type SyncStatusChangedCallback = (status: number) => void
+
+/**
+ * Callback for download progress
+ * Compatible with react-native-code-push
+ */
+export type DownloadProgressCallback = (progress: DownloadProgress) => void
+
+/**
+ * Callback for binary version mismatch
+ * Called when an update requires a newer native binary version
+ * Compatible with react-native-code-push
+ */
+export type HandleBinaryVersionMismatchCallback = (update: RemotePackage) => void

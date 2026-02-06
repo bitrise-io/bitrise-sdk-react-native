@@ -26,6 +26,9 @@ export type {
   RollbackRetryOptions,
   SyncOptions,
   Configuration,
+  SyncStatusChangedCallback,
+  DownloadProgressCallback,
+  HandleBinaryVersionMismatchCallback,
 } from './types/codepush'
 
 // Enums

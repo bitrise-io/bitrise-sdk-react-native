@@ -22,6 +22,23 @@ interface CheckUpdateResponse {
 }
 
 /**
+ * Result of checking for updates
+ * Includes information about binary version mismatches
+ */
+export interface CheckUpdateResult {
+  /**
+   * The remote package if an update is available, null otherwise
+   */
+  remotePackage: RemotePackage | null
+
+  /**
+   * Whether a binary (native app) update is required
+   * When true, remotePackage contains the update info for display purposes
+   */
+  binaryVersionMismatch: boolean
+}
+
+/**
  * HTTP client for Bitrise CodePush API
  * Minimal wrapper around React Native's fetch API
  */
@@ -43,6 +60,21 @@ export class BitriseClient {
    * @returns RemotePackage if update available, null otherwise
    */
   async checkForUpdate(currentPackageHash?: string): Promise<RemotePackage | null> {
+    const result = await this.checkForUpdateWithMismatchInfo(currentPackageHash)
+    // For backward compatibility, return null for binary mismatches
+    if (result.binaryVersionMismatch) {
+      return null
+    }
+    return result.remotePackage
+  }
+
+  /**
+   * Check for available updates with binary version mismatch information
+   * @param currentPackageHash - Hash of currently installed package (if any)
+   * @returns CheckUpdateResult with package and mismatch info
+   * @internal Used by sync() to support mismatch callbacks
+   */
+  async checkForUpdateWithMismatchInfo(currentPackageHash?: string): Promise<CheckUpdateResult> {
     const url = `${this.serverUrl}/release-management/v1/code-push/update_check`
 
     const clientUniqueId = await this.getClientUniqueId()
@@ -68,7 +100,7 @@ export class BitriseClient {
       if (!response.ok) {
         if (response.status === 404) {
           // No update available
-          return null
+          return { remotePackage: null, binaryVersionMismatch: false }
         }
         const errorMessage = `HTTP ${response.status}: ${response.statusText}`
         throw new NetworkError(errorMessage, { status: response.status, url })
@@ -78,19 +110,13 @@ export class BitriseClient {
 
       // No update available
       if (!data.updateInfo || !data.updateInfo.isAvailable) {
-        return null
+        return { remotePackage: null, binaryVersionMismatch: false }
       }
 
       const updateInfo = data.updateInfo
 
-      // Check if binary version matches
-      if (updateInfo.shouldRunBinaryVersion || updateInfo.updateAppVersion) {
-        // Binary update required - CodePush cannot handle this
-        return null
-      }
-
       // Create RemotePackage instance
-      return new RemotePackageImpl({
+      const remotePackage = new RemotePackageImpl({
         appVersion: updateInfo.appVersion,
         deploymentKey: this.deploymentKey,
         description: updateInfo.description || '',
@@ -103,6 +129,14 @@ export class BitriseClient {
         packageSize: updateInfo.packageSize,
         downloadUrl: updateInfo.downloadUrl,
       })
+
+      // Check if binary version matches
+      if (updateInfo.shouldRunBinaryVersion || updateInfo.updateAppVersion) {
+        // Binary update required - return package with mismatch flag
+        return { remotePackage, binaryVersionMismatch: true }
+      }
+
+      return { remotePackage, binaryVersionMismatch: false }
     } catch (error) {
       if (error instanceof NetworkError) {
         throw error
