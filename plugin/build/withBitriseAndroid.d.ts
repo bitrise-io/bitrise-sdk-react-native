@@ -9,8 +9,8 @@ import type { BitrisePluginOptions } from './types'
  * This plugin:
  * 1. Reads deployment key from plugin options (android.deploymentKey or top-level deploymentKey)
  * 2. Reads server URL from plugin options (android.serverUrl or top-level serverUrl)
- * 3. Adds BitriseCodePushDeploymentKey to strings.xml (non-translatable)
- * 4. Adds BitriseCodePushServerURL to strings.xml (non-translatable)
+ * 3. Adds CodePushDeploymentKey to strings.xml (non-translatable)
+ * 4. Adds CodePushServerURL to strings.xml (non-translatable)
  *
  * The deployment key is required. If not provided, an error is thrown.
  *

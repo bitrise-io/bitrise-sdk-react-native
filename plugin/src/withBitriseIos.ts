@@ -11,8 +11,8 @@ import type { BitrisePluginOptions } from './types'
  * This plugin:
  * 1. Reads deployment key from plugin options (ios.deploymentKey or top-level deploymentKey)
  * 2. Reads server URL from plugin options (ios.serverUrl or top-level serverUrl)
- * 3. Adds BitriseCodePushDeploymentKey to Info.plist
- * 4. Adds BitriseCodePushServerURL to Info.plist
+ * 3. Adds CodePushDeploymentKey to Info.plist
+ * 4. Adds CodePushServerURL to Info.plist
  *
  * The deployment key is required. If not provided, an error is thrown.
  *
@@ -35,8 +35,8 @@ export const withBitriseIos: ConfigPlugin<BitrisePluginOptions> = (config, optio
     }
 
     // Add Bitrise configuration to Info.plist
-    config.modResults.BitriseCodePushDeploymentKey = deploymentKey
-    config.modResults.BitriseCodePushServerURL = serverUrl
+    config.modResults.CodePushDeploymentKey = deploymentKey
+    config.modResults.CodePushServerURL = serverUrl
 
     return config
   })

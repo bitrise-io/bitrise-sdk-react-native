@@ -32,7 +32,7 @@ describe('ExpoConfig', () => {
       it('should return deployment key from RNBundle on iOS', () => {
         // Arrange
         ;(NativeModules as any).RNBundle = {
-          BitriseCodePushDeploymentKey: 'test-ios-deployment-key',
+          CodePushDeploymentKey: 'test-ios-deployment-key',
         }
 
         // Act
@@ -70,7 +70,7 @@ describe('ExpoConfig', () => {
         // Arrange
         ;(NativeModules as any).RNBundle = undefined
         ;(NativeModules as any).InfoPlistReader = {
-          BitriseCodePushDeploymentKey: 'test-fallback-key',
+          CodePushDeploymentKey: 'test-fallback-key',
         }
 
         // Act
@@ -98,7 +98,7 @@ describe('ExpoConfig', () => {
         // Assert
         expect(result).toBe('test-android-deployment-key')
         expect(NativeModules.BitriseFileSystem.getStringResource).toHaveBeenCalledWith(
-          'BitriseCodePushDeploymentKey'
+          'CodePushDeploymentKey'
         )
       })
 
@@ -161,7 +161,7 @@ describe('ExpoConfig', () => {
       it('should return server URL from RNBundle on iOS', () => {
         // Arrange
         ;(NativeModules as any).RNBundle = {
-          BitriseCodePushServerURL: 'https://custom-ios.api.bitrise.io',
+          CodePushServerURL: 'https://custom-ios.api.bitrise.io',
         }
 
         // Act
@@ -199,7 +199,7 @@ describe('ExpoConfig', () => {
         // Arrange
         ;(NativeModules as any).RNBundle = undefined
         ;(NativeModules as any).InfoPlistReader = {
-          BitriseCodePushServerURL: 'https://fallback.api.bitrise.io',
+          CodePushServerURL: 'https://fallback.api.bitrise.io',
         }
 
         // Act
@@ -227,7 +227,7 @@ describe('ExpoConfig', () => {
         // Assert
         expect(result).toBe('https://custom-android.api.bitrise.io')
         expect(NativeModules.BitriseFileSystem.getStringResource).toHaveBeenCalledWith(
-          'BitriseCodePushServerURL'
+          'CodePushServerURL'
         )
       })
 

@@ -37,16 +37,16 @@ export class ExpoConfig {
    * Get the deployment key from native configuration.
    *
    * This reads:
-   * - iOS: `BitriseCodePushDeploymentKey` from Info.plist
-   * - Android: `BitriseCodePushDeploymentKey` from strings.xml
+   * - iOS: `CodePushDeploymentKey` from Info.plist
+   * - Android: `CodePushDeploymentKey` from strings.xml
    *
    * @returns The deployment key if configured, null otherwise
    */
   static getDeploymentKey(): string | null {
     if (Platform.OS === 'ios') {
-      return this.getInfoPlistValue('BitriseCodePushDeploymentKey')
+      return this.getInfoPlistValue('CodePushDeploymentKey')
     } else if (Platform.OS === 'android') {
-      return this.getAndroidStringResource('BitriseCodePushDeploymentKey')
+      return this.getAndroidStringResource('CodePushDeploymentKey')
     }
     return null
   }
@@ -55,16 +55,16 @@ export class ExpoConfig {
    * Get the server URL from native configuration.
    *
    * This reads:
-   * - iOS: `BitriseCodePushServerURL` from Info.plist
-   * - Android: `BitriseCodePushServerURL` from strings.xml
+   * - iOS: `CodePushServerURL` from Info.plist
+   * - Android: `CodePushServerURL` from strings.xml
    *
    * @returns The server URL if configured, null otherwise
    */
   static getServerUrl(): string | null {
     if (Platform.OS === 'ios') {
-      return this.getInfoPlistValue('BitriseCodePushServerURL')
+      return this.getInfoPlistValue('CodePushServerURL')
     } else if (Platform.OS === 'android') {
-      return this.getAndroidStringResource('BitriseCodePushServerURL')
+      return this.getAndroidStringResource('CodePushServerURL')
     }
     return null
   }

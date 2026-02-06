@@ -661,26 +661,26 @@ npx expo prebuild --clean
 
 iOS:
 ```bash
-cat ios/YourApp/Info.plist | grep BitriseCodePush
+cat ios/YourApp/Info.plist | grep CodePush
 ```
 
 Expected output:
 ```xml
-<key>BitriseCodePushDeploymentKey</key>
+<key>CodePushDeploymentKey</key>
 <string>your-ios-key</string>
-<key>BitriseCodePushServerURL</key>
+<key>CodePushServerURL</key>
 <string>https://api.bitrise.io</string>
 ```
 
 Android:
 ```bash
-cat android/app/src/main/res/values/strings.xml | grep BitriseCodePush
+cat android/app/src/main/res/values/strings.xml | grep CodePush
 ```
 
 Expected output:
 ```xml
-<string name="BitriseCodePushDeploymentKey" translatable="false">your-android-key</string>
-<string name="BitriseCodePushServerURL" translatable="false">https://api.bitrise.io</string>
+<string name="CodePushDeploymentKey" translatable="false">your-android-key</string>
+<string name="CodePushServerURL" translatable="false">https://api.bitrise.io</string>
 ```
 
 **Step 3:** Test runtime configuration:

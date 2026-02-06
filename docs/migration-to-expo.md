@@ -92,16 +92,16 @@ Since the Expo plugin now handles native configuration automatically, you can re
 #### iOS
 
 Remove from `Info.plist` (if you added them manually):
-- `BitriseCodePushDeploymentKey`
-- `BitriseCodePushServerURL`
+- `CodePushDeploymentKey`
+- `CodePushServerURL`
 
 The plugin will add these automatically during prebuild.
 
 #### Android
 
 Remove from `strings.xml` (if you added them manually):
-- `BitriseCodePushDeploymentKey`
-- `BitriseCodePushServerURL`
+- `CodePushDeploymentKey`
+- `CodePushServerURL`
 
 The plugin will add these automatically during prebuild.
 
@@ -153,12 +153,12 @@ Check that the plugin correctly configured the native files:
 
 **iOS:**
 ```bash
-cat ios/YourApp/Info.plist | grep BitriseCodePush
+cat ios/YourApp/Info.plist | grep CodePush
 ```
 
 **Android:**
 ```bash
-cat android/app/src/main/res/values/strings.xml | grep BitriseCodePush
+cat android/app/src/main/res/values/strings.xml | grep CodePush
 ```
 
 ### Step 8: Test the App
@@ -368,7 +368,7 @@ rm -rf ios android
 npx expo prebuild
 
 # Verify configuration
-cat ios/YourApp/Info.plist | grep BitriseCodePush
+cat ios/YourApp/Info.plist | grep CodePush
 ```
 
 ### Issue: App builds but CodePush fails

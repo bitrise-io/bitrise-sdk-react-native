@@ -6,8 +6,8 @@ Expo config plugin for the Bitrise React Native SDK. This plugin automatically c
 
 During `expo prebuild`, this plugin:
 
-1. **iOS**: Adds `BitriseCodePushDeploymentKey` and `BitriseCodePushServerURL` to `Info.plist`
-2. **Android**: Adds `BitriseCodePushDeploymentKey` and `BitriseCodePushServerURL` to `strings.xml`
+1. **iOS**: Adds `CodePushDeploymentKey` and `CodePushServerURL` to `Info.plist`
+2. **Android**: Adds `CodePushDeploymentKey` and `CodePushServerURL` to `strings.xml`
 3. Enables the SDK to automatically read these values at runtime
 
 ## Installation

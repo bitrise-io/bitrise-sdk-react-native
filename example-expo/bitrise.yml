@@ -42,7 +42,7 @@ workflows:
             # Verify iOS Info.plist has deployment key
             if [ -f "ios/bitriseSDKexpoexample/Info.plist" ]; then
               echo "✓ iOS Info.plist found"
-              if grep -q "BitriseCodePushDeploymentKey" "ios/bitriseSDKexpoexample/Info.plist"; then
+              if grep -q "CodePushDeploymentKey" "ios/bitriseSDKexpoexample/Info.plist"; then
                 echo "✓ iOS deployment key configured"
               else
                 echo "✗ iOS deployment key NOT found in Info.plist"
@@ -53,7 +53,7 @@ workflows:
             # Verify Android strings.xml has deployment key
             if [ -f "android/app/src/main/res/values/strings.xml" ]; then
               echo "✓ Android strings.xml found"
-              if grep -q "BitriseCodePushDeploymentKey" "android/app/src/main/res/values/strings.xml"; then
+              if grep -q "CodePushDeploymentKey" "android/app/src/main/res/values/strings.xml"; then
                 echo "✓ Android deployment key configured"
               else
                 echo "✗ Android deployment key NOT found in strings.xml"

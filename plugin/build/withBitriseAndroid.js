@@ -11,8 +11,8 @@ const config_plugins_1 = require("expo/config-plugins");
  * This plugin:
  * 1. Reads deployment key from plugin options (android.deploymentKey or top-level deploymentKey)
  * 2. Reads server URL from plugin options (android.serverUrl or top-level serverUrl)
- * 3. Adds BitriseCodePushDeploymentKey to strings.xml (non-translatable)
- * 4. Adds BitriseCodePushServerURL to strings.xml (non-translatable)
+ * 3. Adds CodePushDeploymentKey to strings.xml (non-translatable)
+ * 4. Adds CodePushServerURL to strings.xml (non-translatable)
  *
  * The deployment key is required. If not provided, an error is thrown.
  *
@@ -35,11 +35,11 @@ const withBitriseAndroid = (config, options) => {
         // Using setStringItem to ensure proper XML structure
         const stringItems = [
             {
-                $: { name: 'BitriseCodePushDeploymentKey', translatable: 'false' },
+                $: { name: 'CodePushDeploymentKey', translatable: 'false' },
                 _: deploymentKey,
             },
             {
-                $: { name: 'BitriseCodePushServerURL', translatable: 'false' },
+                $: { name: 'CodePushServerURL', translatable: 'false' },
                 _: serverUrl,
             },
         ];

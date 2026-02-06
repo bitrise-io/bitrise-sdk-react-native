@@ -41,8 +41,8 @@ describe('withBitriseIos', () => {
     expect(result).toBeDefined()
     expect(withInfoPlist).toHaveBeenCalledWith(mockConfig, expect.any(Function))
     expect(result.modResults).toEqual({
-      BitriseCodePushDeploymentKey: 'test-deployment-key',
-      BitriseCodePushServerURL: 'https://api.bitrise.io',
+      CodePushDeploymentKey: 'test-deployment-key',
+      CodePushServerURL: 'https://api.bitrise.io',
     })
   })
 
@@ -60,7 +60,7 @@ describe('withBitriseIos', () => {
 
     // Assert
     expect(result).toBeDefined()
-    expect(result.modResults.BitriseCodePushDeploymentKey).toBe('ios-specific-key')
+    expect(result.modResults.CodePushDeploymentKey).toBe('ios-specific-key')
   })
 
   it('should use iOS-specific server URL when provided', () => {
@@ -79,7 +79,7 @@ describe('withBitriseIos', () => {
 
     // Assert
     expect(result).toBeDefined()
-    expect(result.modResults.BitriseCodePushServerURL).toBe('https://ios-specific.url')
+    expect(result.modResults.CodePushServerURL).toBe('https://ios-specific.url')
   })
 
   it('should use top-level deployment key when iOS-specific key is not provided', () => {
@@ -93,7 +93,7 @@ describe('withBitriseIos', () => {
 
     // Assert
     expect(result).toBeDefined()
-    expect(result.modResults.BitriseCodePushDeploymentKey).toBe('top-level-key')
+    expect(result.modResults.CodePushDeploymentKey).toBe('top-level-key')
   })
 
   it('should use top-level server URL when iOS-specific URL is not provided', () => {
@@ -108,7 +108,7 @@ describe('withBitriseIos', () => {
 
     // Assert
     expect(result).toBeDefined()
-    expect(result.modResults.BitriseCodePushServerURL).toBe('https://custom.url')
+    expect(result.modResults.CodePushServerURL).toBe('https://custom.url')
   })
 
   it('should use default server URL when no server URL is provided', () => {
@@ -122,7 +122,7 @@ describe('withBitriseIos', () => {
 
     // Assert
     expect(result).toBeDefined()
-    expect(result.modResults.BitriseCodePushServerURL).toBe('https://api.bitrise.io')
+    expect(result.modResults.CodePushServerURL).toBe('https://api.bitrise.io')
   })
 
   it('should throw error when deployment key is missing', () => {

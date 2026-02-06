@@ -55,11 +55,11 @@ describe('withBitriseAndroid', () => {
     expect(AndroidConfig.Strings.setStringItem).toHaveBeenCalledWith(
       [
         {
-          $: { name: 'BitriseCodePushDeploymentKey', translatable: 'false' },
+          $: { name: 'CodePushDeploymentKey', translatable: 'false' },
           _: 'test-deployment-key',
         },
         {
-          $: { name: 'BitriseCodePushServerURL', translatable: 'false' },
+          $: { name: 'CodePushServerURL', translatable: 'false' },
           _: 'https://api.bitrise.io',
         },
       ],
