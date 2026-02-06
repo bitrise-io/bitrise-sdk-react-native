@@ -165,6 +165,76 @@ describe('CodePush', () => {
 
       await expect(codePushWithoutKey.checkForUpdate()).rejects.toThrow(ConfigurationError)
     })
+
+    describe('binary version mismatch callback', () => {
+      const mockRemotePackage: RemotePackage = {
+        appVersion: '2.0.0',
+        deploymentKey: 'test-key',
+        description: 'Binary update',
+        failedInstall: false,
+        isFirstRun: false,
+        isMandatory: false,
+        isPending: false,
+        label: 'v2',
+        packageHash: 'hash456',
+        packageSize: 1024,
+        downloadUrl: 'https://example.com/package.zip',
+        download: jest.fn(),
+      }
+
+      it('should call handleBinaryVersionMismatchCallback when binary update required', async () => {
+        const mismatchCallback = jest.fn()
+        ;(PackageStorage.getCurrentPackage as jest.Mock).mockResolvedValue(null)
+        ;(BitriseClient.prototype.checkForUpdateWithMismatchInfo as jest.Mock).mockResolvedValue({
+          remotePackage: mockRemotePackage,
+          binaryVersionMismatch: true,
+        })
+
+        const result = await codePush.checkForUpdate(undefined, mismatchCallback)
+
+        expect(mismatchCallback).toHaveBeenCalledWith(mockRemotePackage)
+        expect(result).toBeNull()
+      })
+
+      it('should not call callback when no binary mismatch', async () => {
+        const mismatchCallback = jest.fn()
+        ;(PackageStorage.getCurrentPackage as jest.Mock).mockResolvedValue(null)
+        ;(BitriseClient.prototype.checkForUpdateWithMismatchInfo as jest.Mock).mockResolvedValue({
+          remotePackage: mockRemotePackage,
+          binaryVersionMismatch: false,
+        })
+
+        const result = await codePush.checkForUpdate(undefined, mismatchCallback)
+
+        expect(mismatchCallback).not.toHaveBeenCalled()
+        expect(result).toEqual(mockRemotePackage)
+      })
+
+      it('should return null for mismatch even without callback', async () => {
+        ;(PackageStorage.getCurrentPackage as jest.Mock).mockResolvedValue(null)
+        ;(BitriseClient.prototype.checkForUpdateWithMismatchInfo as jest.Mock).mockResolvedValue({
+          remotePackage: mockRemotePackage,
+          binaryVersionMismatch: true,
+        })
+
+        const result = await codePush.checkForUpdate()
+
+        expect(result).toBeNull()
+      })
+
+      it('should work with custom deployment key and callback', async () => {
+        const mismatchCallback = jest.fn()
+        ;(PackageStorage.getCurrentPackage as jest.Mock).mockResolvedValue(null)
+        ;(BitriseClient.prototype.checkForUpdateWithMismatchInfo as jest.Mock).mockResolvedValue({
+          remotePackage: mockRemotePackage,
+          binaryVersionMismatch: true,
+        })
+
+        await codePush.checkForUpdate('custom-key', mismatchCallback)
+
+        expect(mismatchCallback).toHaveBeenCalledWith(mockRemotePackage)
+      })
+    })
   })
 
   describe('getUpdateMetadata', () => {
@@ -183,6 +253,7 @@ describe('CodePush', () => {
 
     it('should return current package for RUNNING state', async () => {
       ;(PackageStorage.getCurrentPackage as jest.Mock).mockResolvedValue(mockPackage)
+      ;(PackageStorage.getNotifiedPackageHash as jest.Mock).mockResolvedValue('hash123')
 
       const result = await codePush.getUpdateMetadata(UpdateState.RUNNING)
 
@@ -192,6 +263,7 @@ describe('CodePush', () => {
 
     it('should return pending package for PENDING state', async () => {
       ;(PackageStorage.getPendingPackage as jest.Mock).mockResolvedValue(mockPackage)
+      ;(PackageStorage.getNotifiedPackageHash as jest.Mock).mockResolvedValue('hash123')
 
       const result = await codePush.getUpdateMetadata(UpdateState.PENDING)
 
@@ -201,6 +273,7 @@ describe('CodePush', () => {
 
     it('should return pending package for LATEST state if available', async () => {
       ;(PackageStorage.getPendingPackage as jest.Mock).mockResolvedValue(mockPackage)
+      ;(PackageStorage.getNotifiedPackageHash as jest.Mock).mockResolvedValue('hash123')
 
       const result = await codePush.getUpdateMetadata(UpdateState.LATEST)
 
@@ -211,6 +284,7 @@ describe('CodePush', () => {
     it('should return current package for LATEST state if no pending', async () => {
       ;(PackageStorage.getPendingPackage as jest.Mock).mockResolvedValue(null)
       ;(PackageStorage.getCurrentPackage as jest.Mock).mockResolvedValue(mockPackage)
+      ;(PackageStorage.getNotifiedPackageHash as jest.Mock).mockResolvedValue('hash123')
 
       const result = await codePush.getUpdateMetadata(UpdateState.LATEST)
 
@@ -220,6 +294,7 @@ describe('CodePush', () => {
 
     it('should default to RUNNING state if not specified', async () => {
       ;(PackageStorage.getCurrentPackage as jest.Mock).mockResolvedValue(mockPackage)
+      ;(PackageStorage.getNotifiedPackageHash as jest.Mock).mockResolvedValue('hash123')
 
       const result = await codePush.getUpdateMetadata()
 
@@ -232,6 +307,54 @@ describe('CodePush', () => {
       const result = await codePush.getUpdateMetadata(invalidState)
 
       expect(result).toBeNull()
+    })
+
+    describe('isFirstRun calculation', () => {
+      it('should set isFirstRun to true when no notified hash exists', async () => {
+        ;(PackageStorage.getCurrentPackage as jest.Mock).mockResolvedValue(mockPackage)
+        ;(PackageStorage.getNotifiedPackageHash as jest.Mock).mockResolvedValue(null)
+
+        const result = await codePush.getUpdateMetadata(UpdateState.RUNNING)
+
+        expect(result?.isFirstRun).toBe(true)
+      })
+
+      it('should set isFirstRun to true when notified hash differs from package hash', async () => {
+        ;(PackageStorage.getCurrentPackage as jest.Mock).mockResolvedValue(mockPackage)
+        ;(PackageStorage.getNotifiedPackageHash as jest.Mock).mockResolvedValue('different-hash')
+
+        const result = await codePush.getUpdateMetadata(UpdateState.RUNNING)
+
+        expect(result?.isFirstRun).toBe(true)
+      })
+
+      it('should set isFirstRun to false when notified hash matches package hash', async () => {
+        ;(PackageStorage.getCurrentPackage as jest.Mock).mockResolvedValue(mockPackage)
+        ;(PackageStorage.getNotifiedPackageHash as jest.Mock).mockResolvedValue('hash123')
+
+        const result = await codePush.getUpdateMetadata(UpdateState.RUNNING)
+
+        expect(result?.isFirstRun).toBe(false)
+      })
+
+      it('should calculate isFirstRun for pending package', async () => {
+        ;(PackageStorage.getPendingPackage as jest.Mock).mockResolvedValue(mockPackage)
+        ;(PackageStorage.getNotifiedPackageHash as jest.Mock).mockResolvedValue(null)
+
+        const result = await codePush.getUpdateMetadata(UpdateState.PENDING)
+
+        expect(result?.isFirstRun).toBe(true)
+      })
+
+      it('should calculate isFirstRun for LATEST state', async () => {
+        ;(PackageStorage.getPendingPackage as jest.Mock).mockResolvedValue(null)
+        ;(PackageStorage.getCurrentPackage as jest.Mock).mockResolvedValue(mockPackage)
+        ;(PackageStorage.getNotifiedPackageHash as jest.Mock).mockResolvedValue('hash123')
+
+        const result = await codePush.getUpdateMetadata(UpdateState.LATEST)
+
+        expect(result?.isFirstRun).toBe(false)
+      })
     })
   })
 
@@ -252,6 +375,7 @@ describe('CodePush', () => {
 
       ;(PackageStorage.getPendingPackage as jest.Mock).mockResolvedValue(null)
       ;(PackageStorage.getCurrentPackage as jest.Mock).mockResolvedValue(mockPackage)
+      ;(PackageStorage.getNotifiedPackageHash as jest.Mock).mockResolvedValue('hash123')
 
       const result = await codePush.getCurrentPackage()
 
@@ -755,6 +879,19 @@ describe('CodePush', () => {
         await new Promise(resolve => setTimeout(resolve, 10))
 
         expect(PackageStorage.clearPendingPackage).not.toHaveBeenCalled()
+      })
+
+      it('should set notified package hash to mark isFirstRun as false', async () => {
+        const currentPackage = { packageHash: 'hash123', label: 'v1' }
+        ;(PackageStorage.getCurrentPackage as jest.Mock).mockResolvedValue(currentPackage)
+        ;(PackageStorage.getPendingPackage as jest.Mock).mockResolvedValue(null)
+        ;(PackageStorage.getFailedUpdates as jest.Mock).mockResolvedValue([])
+
+        codePush.notifyAppReady()
+
+        await new Promise(resolve => setTimeout(resolve, 10))
+
+        expect(PackageStorage.setNotifiedPackageHash).toHaveBeenCalledWith('hash123')
       })
 
       it('should clear failed updates when current package is in failed list', async () => {

@@ -18,6 +18,9 @@ interface CheckUpdateResponse {
     packageSize: number
     shouldRunBinaryVersion?: boolean
     updateAppVersion?: boolean
+    // Optional differential update fields (server-driven)
+    diffUrl?: string
+    diffSize?: number
   }
 }
 
@@ -128,6 +131,9 @@ export class BitriseClient {
         packageHash: updateInfo.packageHash,
         packageSize: updateInfo.packageSize,
         downloadUrl: updateInfo.downloadUrl,
+        // Pass differential update info if available from server
+        diffUrl: updateInfo.diffUrl,
+        diffSize: updateInfo.diffSize,
       })
 
       // Check if binary version matches

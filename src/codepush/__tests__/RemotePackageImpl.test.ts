@@ -383,5 +383,184 @@ describe('RemotePackageImpl', () => {
         totalBytes: 1024,
       })
     })
+
+    describe('differential download', () => {
+      const mockPackageWithDiff = {
+        ...mockPackageData,
+        diffUrl: 'https://example.com/package.diff',
+        diffSize: 256,
+      }
+
+      it('should use diffUrl when available', async () => {
+        const pkg = new RemotePackageImpl(mockPackageWithDiff)
+        const mockData = new Uint8Array([1, 2, 3])
+
+        const mockReader = {
+          read: jest
+            .fn()
+            .mockResolvedValueOnce({ done: false, value: mockData })
+            .mockResolvedValueOnce({ done: true }),
+        }
+
+        ;(global.fetch as jest.Mock).mockResolvedValue({
+          ok: true,
+          headers: {
+            get: jest.fn().mockReturnValue('3'),
+          },
+          body: {
+            getReader: jest.fn().mockReturnValue(mockReader),
+          },
+        })
+        ;(fileUtils.calculateHash as jest.Mock).mockResolvedValue('abc123')
+        ;(fileUtils.savePackage as jest.Mock).mockResolvedValue('/codepush/abc123/index.bundle')
+
+        await pkg.download()
+
+        // Should fetch from diffUrl, not downloadUrl
+        expect(global.fetch).toHaveBeenCalledWith(
+          'https://example.com/package.diff',
+          expect.any(Object)
+        )
+      })
+
+      it('should report progress based on diffSize', async () => {
+        const pkg = new RemotePackageImpl(mockPackageWithDiff)
+        const progressCallback = jest.fn()
+        const mockData = new Uint8Array([1, 2, 3])
+
+        const mockReader = {
+          read: jest
+            .fn()
+            .mockResolvedValueOnce({ done: false, value: mockData })
+            .mockResolvedValueOnce({ done: true }),
+        }
+
+        ;(global.fetch as jest.Mock).mockResolvedValue({
+          ok: true,
+          headers: {
+            get: jest.fn().mockReturnValue('3'),
+          },
+          body: {
+            getReader: jest.fn().mockReturnValue(mockReader),
+          },
+        })
+        ;(fileUtils.calculateHash as jest.Mock).mockResolvedValue('abc123')
+        ;(fileUtils.savePackage as jest.Mock).mockResolvedValue('/codepush/abc123/index.bundle')
+
+        await pkg.download(progressCallback)
+
+        // Progress should use diffSize (256), not packageSize (1024)
+        expect(progressCallback).toHaveBeenCalledWith({
+          receivedBytes: 3,
+          totalBytes: 256,
+        })
+      })
+
+      it('should fall back to full download when diff fails', async () => {
+        const pkg = new RemotePackageImpl(mockPackageWithDiff)
+        const mockData = new Uint8Array([1, 2, 3])
+
+        const mockReader = {
+          read: jest
+            .fn()
+            .mockResolvedValueOnce({ done: false, value: mockData })
+            .mockResolvedValueOnce({ done: true }),
+        }
+
+        // Diff download has 3 retries, so reject 3 times then succeed for full download
+        ;(global.fetch as jest.Mock)
+          .mockRejectedValueOnce(new Error('Diff download failed'))
+          .mockRejectedValueOnce(new Error('Diff download failed'))
+          .mockRejectedValueOnce(new Error('Diff download failed'))
+          .mockResolvedValueOnce({
+            ok: true,
+            headers: {
+              get: jest.fn().mockReturnValue('3'),
+            },
+            body: {
+              getReader: jest.fn().mockReturnValue(mockReader),
+            },
+          })
+        ;(fileUtils.calculateHash as jest.Mock).mockResolvedValue('abc123')
+        ;(fileUtils.savePackage as jest.Mock).mockResolvedValue('/codepush/abc123/index.bundle')
+
+        const localPackage = await pkg.download()
+
+        expect(localPackage.packageHash).toBe('abc123')
+        // Should have tried diff first, then full download
+        expect(console.warn).toHaveBeenCalledWith(
+          '[CodePush] Differential download failed, falling back to full download:',
+          expect.any(String)
+        )
+      })
+
+      it('should fall back to full download when diff hash verification fails', async () => {
+        const pkg = new RemotePackageImpl(mockPackageWithDiff)
+        const mockData = new Uint8Array([1, 2, 3])
+
+        const createMockReader = () => ({
+          read: jest
+            .fn()
+            .mockResolvedValueOnce({ done: false, value: mockData })
+            .mockResolvedValueOnce({ done: true }),
+        })
+
+        ;(global.fetch as jest.Mock).mockResolvedValue({
+          ok: true,
+          headers: {
+            get: jest.fn().mockReturnValue('3'),
+          },
+          body: {
+            getReader: jest.fn(() => createMockReader()),
+          },
+        })
+
+        // First hash check fails (diff), second succeeds (full download)
+        ;(fileUtils.calculateHash as jest.Mock)
+          .mockResolvedValueOnce('wronghash')
+          .mockResolvedValueOnce('abc123')
+        ;(fileUtils.savePackage as jest.Mock).mockResolvedValue('/codepush/abc123/index.bundle')
+
+        const localPackage = await pkg.download()
+
+        expect(localPackage.packageHash).toBe('abc123')
+        expect(console.warn).toHaveBeenCalledWith(
+          expect.stringContaining('Differential download failed'),
+          expect.any(String)
+        )
+      })
+
+      it('should use full download when no diffUrl provided', async () => {
+        const pkg = new RemotePackageImpl(mockPackageData) // No diff info
+        const mockData = new Uint8Array([1, 2, 3])
+
+        const mockReader = {
+          read: jest
+            .fn()
+            .mockResolvedValueOnce({ done: false, value: mockData })
+            .mockResolvedValueOnce({ done: true }),
+        }
+
+        ;(global.fetch as jest.Mock).mockResolvedValue({
+          ok: true,
+          headers: {
+            get: jest.fn().mockReturnValue('3'),
+          },
+          body: {
+            getReader: jest.fn().mockReturnValue(mockReader),
+          },
+        })
+        ;(fileUtils.calculateHash as jest.Mock).mockResolvedValue('abc123')
+        ;(fileUtils.savePackage as jest.Mock).mockResolvedValue('/codepush/abc123/index.bundle')
+
+        await pkg.download()
+
+        // Should fetch from downloadUrl
+        expect(global.fetch).toHaveBeenCalledWith(
+          'https://example.com/package.zip',
+          expect.any(Object)
+        )
+      })
+    })
   })
 })

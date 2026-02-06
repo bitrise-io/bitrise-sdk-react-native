@@ -72,24 +72,26 @@ describe('CodePush Download & Install Integration', () => {
       const mockData = new Uint8Array([72, 101, 108, 108, 111]) // "Hello"
 
       // Mock checkForUpdate to return RemotePackageImpl instance
-      const mockCheckForUpdate = jest.fn().mockResolvedValue(
-        new RemotePackageImpl({
-          appVersion: '1.0.0',
-          deploymentKey: 'test-key',
-          description: 'Test update',
-          failedInstall: false,
-          isFirstRun: false,
-          isMandatory: false,
-          isPending: false,
-          label: 'v1',
-          packageHash: 'abc123',
-          packageSize: 5,
-          downloadUrl: 'https://example.com/package.zip',
-        })
-      )
+      const mockRemotePackage = new RemotePackageImpl({
+        appVersion: '1.0.0',
+        deploymentKey: 'test-key',
+        description: 'Test update',
+        failedInstall: false,
+        isFirstRun: false,
+        isMandatory: false,
+        isPending: false,
+        label: 'v1',
+        packageHash: 'abc123',
+        packageSize: 5,
+        downloadUrl: 'https://example.com/package.zip',
+      })
 
       ;(BitriseClient as jest.Mock).mockImplementation(() => ({
-        checkForUpdate: mockCheckForUpdate,
+        checkForUpdate: jest.fn().mockResolvedValue(mockRemotePackage),
+        checkForUpdateWithMismatchInfo: jest.fn().mockResolvedValue({
+          remotePackage: mockRemotePackage,
+          binaryVersionMismatch: false,
+        }),
       }))
 
       // Mock fetch for download
@@ -154,24 +156,26 @@ describe('CodePush Download & Install Integration', () => {
     it('should handle immediate install and restart', async () => {
       const mockData = new Uint8Array([1, 2, 3])
 
-      const mockCheckForUpdate = jest.fn().mockResolvedValue(
-        new RemotePackageImpl({
-          appVersion: '1.0.0',
-          deploymentKey: 'test-key',
-          description: 'Urgent fix',
-          failedInstall: false,
-          isFirstRun: false,
-          isMandatory: true,
-          isPending: false,
-          label: 'v2',
-          packageHash: 'xyz789',
-          packageSize: 3,
-          downloadUrl: 'https://example.com/package.zip',
-        })
-      )
+      const mockRemotePackage = new RemotePackageImpl({
+        appVersion: '1.0.0',
+        deploymentKey: 'test-key',
+        description: 'Urgent fix',
+        failedInstall: false,
+        isFirstRun: false,
+        isMandatory: true,
+        isPending: false,
+        label: 'v2',
+        packageHash: 'xyz789',
+        packageSize: 3,
+        downloadUrl: 'https://example.com/package.zip',
+      })
 
       ;(BitriseClient as jest.Mock).mockImplementation(() => ({
-        checkForUpdate: mockCheckForUpdate,
+        checkForUpdate: jest.fn().mockResolvedValue(mockRemotePackage),
+        checkForUpdateWithMismatchInfo: jest.fn().mockResolvedValue({
+          remotePackage: mockRemotePackage,
+          binaryVersionMismatch: false,
+        }),
       }))
 
       const mockReader = {
@@ -212,24 +216,26 @@ describe('CodePush Download & Install Integration', () => {
     })
 
     it('should clean up partial download on failure', async () => {
-      const mockCheckForUpdate = jest.fn().mockResolvedValue(
-        new RemotePackageImpl({
-          appVersion: '1.0.0',
-          deploymentKey: 'test-key',
-          description: 'Test update',
-          failedInstall: false,
-          isFirstRun: false,
-          isMandatory: false,
-          isPending: false,
-          label: 'v3',
-          packageHash: 'fail123',
-          packageSize: 100,
-          downloadUrl: 'https://example.com/package.zip',
-        })
-      )
+      const mockRemotePackage = new RemotePackageImpl({
+        appVersion: '1.0.0',
+        deploymentKey: 'test-key',
+        description: 'Test update',
+        failedInstall: false,
+        isFirstRun: false,
+        isMandatory: false,
+        isPending: false,
+        label: 'v3',
+        packageHash: 'fail123',
+        packageSize: 100,
+        downloadUrl: 'https://example.com/package.zip',
+      })
 
       ;(BitriseClient as jest.Mock).mockImplementation(() => ({
-        checkForUpdate: mockCheckForUpdate,
+        checkForUpdate: jest.fn().mockResolvedValue(mockRemotePackage),
+        checkForUpdateWithMismatchInfo: jest.fn().mockResolvedValue({
+          remotePackage: mockRemotePackage,
+          binaryVersionMismatch: false,
+        }),
       }))
 
       // Mock fetch failure
@@ -247,24 +253,26 @@ describe('CodePush Download & Install Integration', () => {
     it('should handle hash mismatch during download', async () => {
       const mockData = new Uint8Array([1, 2, 3])
 
-      const mockCheckForUpdate = jest.fn().mockResolvedValue(
-        new RemotePackageImpl({
-          appVersion: '1.0.0',
-          deploymentKey: 'test-key',
-          description: 'Test update',
-          failedInstall: false,
-          isFirstRun: false,
-          isMandatory: false,
-          isPending: false,
-          label: 'v4',
-          packageHash: 'expected123',
-          packageSize: 3,
-          downloadUrl: 'https://example.com/package.zip',
-        })
-      )
+      const mockRemotePackage = new RemotePackageImpl({
+        appVersion: '1.0.0',
+        deploymentKey: 'test-key',
+        description: 'Test update',
+        failedInstall: false,
+        isFirstRun: false,
+        isMandatory: false,
+        isPending: false,
+        label: 'v4',
+        packageHash: 'expected123',
+        packageSize: 3,
+        downloadUrl: 'https://example.com/package.zip',
+      })
 
       ;(BitriseClient as jest.Mock).mockImplementation(() => ({
-        checkForUpdate: mockCheckForUpdate,
+        checkForUpdate: jest.fn().mockResolvedValue(mockRemotePackage),
+        checkForUpdateWithMismatchInfo: jest.fn().mockResolvedValue({
+          remotePackage: mockRemotePackage,
+          binaryVersionMismatch: false,
+        }),
       }))
 
       // Create a new reader for each fetch attempt
@@ -300,24 +308,26 @@ describe('CodePush Download & Install Integration', () => {
       const chunk2 = new Uint8Array([4, 5])
       const chunk3 = new Uint8Array([6])
 
-      const mockCheckForUpdate = jest.fn().mockResolvedValue(
-        new RemotePackageImpl({
-          appVersion: '1.0.0',
-          deploymentKey: 'test-key',
-          description: 'Test update',
-          failedInstall: false,
-          isFirstRun: false,
-          isMandatory: false,
-          isPending: false,
-          label: 'v5',
-          packageHash: 'progress123',
-          packageSize: 6,
-          downloadUrl: 'https://example.com/package.zip',
-        })
-      )
+      const mockRemotePackage = new RemotePackageImpl({
+        appVersion: '1.0.0',
+        deploymentKey: 'test-key',
+        description: 'Test update',
+        failedInstall: false,
+        isFirstRun: false,
+        isMandatory: false,
+        isPending: false,
+        label: 'v5',
+        packageHash: 'progress123',
+        packageSize: 6,
+        downloadUrl: 'https://example.com/package.zip',
+      })
 
       ;(BitriseClient as jest.Mock).mockImplementation(() => ({
-        checkForUpdate: mockCheckForUpdate,
+        checkForUpdate: jest.fn().mockResolvedValue(mockRemotePackage),
+        checkForUpdateWithMismatchInfo: jest.fn().mockResolvedValue({
+          remotePackage: mockRemotePackage,
+          binaryVersionMismatch: false,
+        }),
       }))
 
       const mockReader = {
@@ -363,24 +373,26 @@ describe('CodePush Download & Install Integration', () => {
     it('should handle install with minimumBackgroundDuration', async () => {
       const mockData = new Uint8Array([1, 2, 3])
 
-      const mockCheckForUpdate = jest.fn().mockResolvedValue(
-        new RemotePackageImpl({
-          appVersion: '1.0.0',
-          deploymentKey: 'test-key',
-          description: 'Test update',
-          failedInstall: false,
-          isFirstRun: false,
-          isMandatory: false,
-          isPending: false,
-          label: 'v6',
-          packageHash: 'resume123',
-          packageSize: 3,
-          downloadUrl: 'https://example.com/package.zip',
-        })
-      )
+      const mockRemotePackage = new RemotePackageImpl({
+        appVersion: '1.0.0',
+        deploymentKey: 'test-key',
+        description: 'Test update',
+        failedInstall: false,
+        isFirstRun: false,
+        isMandatory: false,
+        isPending: false,
+        label: 'v6',
+        packageHash: 'resume123',
+        packageSize: 3,
+        downloadUrl: 'https://example.com/package.zip',
+      })
 
       ;(BitriseClient as jest.Mock).mockImplementation(() => ({
-        checkForUpdate: mockCheckForUpdate,
+        checkForUpdate: jest.fn().mockResolvedValue(mockRemotePackage),
+        checkForUpdateWithMismatchInfo: jest.fn().mockResolvedValue({
+          remotePackage: mockRemotePackage,
+          binaryVersionMismatch: false,
+        }),
       }))
 
       const mockReader = {

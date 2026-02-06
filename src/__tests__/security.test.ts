@@ -30,6 +30,14 @@ describe('Security Audit', () => {
     jest.spyOn(console, 'log').mockImplementation()
     jest.spyOn(console, 'warn').mockImplementation()
     jest.spyOn(console, 'error').mockImplementation()
+
+    // Default mock for checkForUpdateWithMismatchInfo that wraps checkForUpdate results
+    ;(BitriseClient.prototype.checkForUpdateWithMismatchInfo as jest.Mock).mockImplementation(
+      async () => {
+        const result = await (BitriseClient.prototype.checkForUpdate as jest.Mock)()
+        return { remotePackage: result, binaryVersionMismatch: false }
+      }
+    )
   })
 
   afterEach(() => {

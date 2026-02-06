@@ -22,8 +22,11 @@ export class RemotePackageImpl implements RemotePackage {
   packageHash: string
   packageSize: number
   downloadUrl: string
+  // Optional differential update fields (server-driven)
+  diffUrl?: string
+  diffSize?: number
 
-  constructor(packageData: Package & { downloadUrl: string }) {
+  constructor(packageData: Package & { downloadUrl: string; diffUrl?: string; diffSize?: number }) {
     this.appVersion = packageData.appVersion
     this.deploymentKey = packageData.deploymentKey
     this.description = packageData.description
@@ -35,6 +38,8 @@ export class RemotePackageImpl implements RemotePackage {
     this.packageHash = packageData.packageHash
     this.packageSize = packageData.packageSize
     this.downloadUrl = packageData.downloadUrl
+    this.diffUrl = packageData.diffUrl
+    this.diffSize = packageData.diffSize
   }
 
   /**
@@ -64,22 +69,42 @@ export class RemotePackageImpl implements RemotePackage {
   /**
    * Internal download method called by the download queue
    * Handles actual download logic, verification, and storage
+   * Supports differential updates when server provides diffUrl
    */
   async _downloadInternal(
     progressCallback?: (progress: DownloadProgress) => void
   ): Promise<LocalPackage> {
     // Report DOWNLOAD_START metric
+    const isDifferential = !!(this.diffUrl && this.diffSize)
     MetricsClient.getInstance()?.reportEvent(MetricEvent.DOWNLOAD_START, {
       packageHash: this.packageHash,
       label: this.label,
       metadata: {
         packageSize: this.packageSize,
+        isDifferential,
+        diffSize: this.diffSize,
       },
     })
 
     try {
-      // Download package with progress tracking
-      const data = await this.downloadWithProgress(this.downloadUrl, progressCallback)
+      let data: Uint8Array
+
+      // Try differential download if available
+      if (this.diffUrl && this.diffSize) {
+        try {
+          data = await this.downloadDifferential(progressCallback)
+        } catch (diffError) {
+          // Log and fall back to full download
+          console.warn(
+            '[CodePush] Differential download failed, falling back to full download:',
+            getErrorMessage(diffError)
+          )
+          data = await this.downloadWithProgress(this.downloadUrl, progressCallback)
+        }
+      } else {
+        // Full package download
+        data = await this.downloadWithProgress(this.downloadUrl, progressCallback)
+      }
 
       // Verify hash
       const isValid = await this.verifyHash(data, this.packageHash)
@@ -288,6 +313,48 @@ export class RemotePackageImpl implements RemotePackage {
     }
 
     return result
+  }
+
+  /**
+   * Download differential/delta package from server
+   * The diff file is expected to be a complete package (server applies the diff)
+   * This method downloads the smaller diff and verifies the result hash
+   *
+   * @throws Error if diff download fails (caller should fall back to full download)
+   */
+  private async downloadDifferential(
+    progressCallback?: (progress: DownloadProgress) => void
+  ): Promise<Uint8Array> {
+    if (!this.diffUrl || !this.diffSize) {
+      throw new UpdateError('Differential download not available', {
+        packageHash: this.packageHash,
+      })
+    }
+
+    // Download the diff package (server has already applied the patch)
+    // Use diffSize for accurate progress reporting
+    const diffProgressCallback = progressCallback
+      ? (progress: DownloadProgress) => {
+          // Report progress based on diff size
+          progressCallback({
+            receivedBytes: progress.receivedBytes,
+            totalBytes: this.diffSize!,
+          })
+        }
+      : undefined
+
+    const data = await this.downloadWithProgress(this.diffUrl, diffProgressCallback)
+
+    // Verify the resulting package hash matches expected
+    // This ensures the diff was applied correctly by the server
+    const isValid = await this.verifyHash(data, this.packageHash)
+    if (!isValid) {
+      throw new UpdateError('Differential package hash verification failed', {
+        packageHash: this.packageHash,
+      })
+    }
+
+    return data
   }
 
   /**

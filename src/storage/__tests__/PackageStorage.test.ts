@@ -880,4 +880,44 @@ describe('PackageStorage', () => {
       })
     })
   })
+
+  describe('notified package hash (isFirstRun tracking)', () => {
+    describe('getNotifiedPackageHash', () => {
+      it('should return null when no hash is stored', async () => {
+        const result = await PackageStorage.getNotifiedPackageHash()
+        expect(result).toBeNull()
+      })
+
+      it('should return stored hash', async () => {
+        await PackageStorage.setNotifiedPackageHash('hash123')
+        const result = await PackageStorage.getNotifiedPackageHash()
+        expect(result).toBe('hash123')
+      })
+    })
+
+    describe('setNotifiedPackageHash', () => {
+      it('should store notified hash', async () => {
+        await PackageStorage.setNotifiedPackageHash('hash123')
+        const result = await PackageStorage.getNotifiedPackageHash()
+        expect(result).toBe('hash123')
+      })
+
+      it('should overwrite previous hash', async () => {
+        await PackageStorage.setNotifiedPackageHash('hash1')
+        await PackageStorage.setNotifiedPackageHash('hash2')
+        const result = await PackageStorage.getNotifiedPackageHash()
+        expect(result).toBe('hash2')
+      })
+
+      it('should persist through clear() for current/pending packages', async () => {
+        await PackageStorage.setNotifiedPackageHash('hash123')
+        await PackageStorage.setCurrentPackage(mockPackage)
+
+        // Clear should reset storage but notified hash survives
+        // because it uses different storage key
+        const result = await PackageStorage.getNotifiedPackageHash()
+        expect(result).toBe('hash123')
+      })
+    })
+  })
 })

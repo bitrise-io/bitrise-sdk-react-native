@@ -60,7 +60,10 @@ export class CodePush {
   /**
    * Check for available updates from Bitrise Release Management
    *
+   * Compatible with react-native-code-push checkForUpdate() signature
+   *
    * @param deploymentKey - Optional deployment key to override configured key
+   * @param handleBinaryVersionMismatchCallback - Optional callback when binary update is required
    * @returns Promise resolving to RemotePackage or null if no update available
    *
    * @example
@@ -70,35 +73,33 @@ export class CodePush {
    *   console.log('Update available:', update.label)
    * }
    * ```
+   *
+   * @example
+   * ```typescript
+   * // With binary mismatch callback
+   * const update = await codePush.checkForUpdate(undefined, (mismatchedUpdate) => {
+   *   console.log('Binary update required for version:', mismatchedUpdate.appVersion)
+   * })
+   * ```
    */
-  async checkForUpdate(deploymentKey?: string): Promise<RemotePackage | null> {
-    // Use custom deployment key if provided
-    const client = deploymentKey
-      ? new BitriseClient(
-          this.bitriseConfig.serverUrl || 'https://api.bitrise.io',
-          deploymentKey,
-          getAppVersion()
-        )
-      : this.getClient()
+  async checkForUpdate(
+    deploymentKey?: string,
+    handleBinaryVersionMismatchCallback?: HandleBinaryVersionMismatchCallback
+  ): Promise<RemotePackage | null> {
+    // Use internal method that provides mismatch info
+    const result = await this.checkForUpdateWithMismatchInfo(deploymentKey)
 
-    // Get current package hash
-    const currentPackage = await PackageStorage.getCurrentPackage()
-    const currentHash = currentPackage?.packageHash
+    // Call mismatch callback if provided and mismatch detected
+    if (result.binaryVersionMismatch && result.remotePackage) {
+      handleBinaryVersionMismatchCallback?.(result.remotePackage)
+    }
 
-    // Check for update
-    const remotePackage = await client.checkForUpdate(currentHash)
+    // Return null for mismatches (backward compatible behavior)
+    if (result.binaryVersionMismatch) {
+      return null
+    }
 
-    // Report UPDATE_CHECK metric
-    MetricsClient.getInstance()?.reportEvent(MetricEvent.UPDATE_CHECK, {
-      packageHash: remotePackage?.packageHash,
-      label: remotePackage?.label,
-      metadata: {
-        isAvailable: !!remotePackage,
-        isMandatory: remotePackage?.isMandatory,
-      },
-    })
-
-    return remotePackage
+    return result.remotePackage
   }
 
   /**
@@ -177,24 +178,49 @@ export class CodePush {
   async getUpdateMetadata(updateState?: UpdateState): Promise<Package | null> {
     const state = updateState ?? UpdateState.RUNNING
 
+    let pkg: Package | null = null
+
     switch (state) {
       case UpdateState.RUNNING:
-        return await PackageStorage.getCurrentPackage()
+        pkg = await PackageStorage.getCurrentPackage()
+        break
 
       case UpdateState.PENDING:
-        return await PackageStorage.getPendingPackage()
+        pkg = await PackageStorage.getPendingPackage()
+        break
 
       case UpdateState.LATEST:
         // Return pending if available, otherwise current
         const pending = await PackageStorage.getPendingPackage()
         if (pending) {
-          return pending
+          pkg = pending
+        } else {
+          pkg = await PackageStorage.getCurrentPackage()
         }
-        return await PackageStorage.getCurrentPackage()
+        break
 
       default:
         return null
     }
+
+    // Calculate isFirstRun dynamically
+    return this.withIsFirstRun(pkg)
+  }
+
+  /**
+   * Calculate isFirstRun for a package
+   * isFirstRun is true if the package hash differs from the last notified hash
+   * @internal
+   */
+  private async withIsFirstRun(pkg: Package | null): Promise<Package | null> {
+    if (!pkg) {
+      return null
+    }
+
+    const notifiedHash = await PackageStorage.getNotifiedPackageHash()
+    const isFirstRun = notifiedHash !== pkg.packageHash
+
+    return { ...pkg, isFirstRun }
   }
 
   /**
@@ -543,6 +569,9 @@ export class CodePush {
       // Cancel rollback timer (app is ready)
       const rollbackManager = RollbackManager.getInstance()
       await rollbackManager.cancelTimer()
+
+      // Mark this package as notified (isFirstRun will be false on next check)
+      await PackageStorage.setNotifiedPackageHash(currentPackage.packageHash)
 
       // Report APP_READY metric
       MetricsClient.getInstance()?.reportEvent(MetricEvent.APP_READY, {

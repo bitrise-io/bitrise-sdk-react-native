@@ -74,9 +74,22 @@ export interface DownloadProgress {
  */
 export interface RemotePackage extends Package {
   /**
-   * Signed URL to download the package
+   * Signed URL to download the full package
    */
   downloadUrl: string
+
+  /**
+   * Optional URL to download a differential/delta package
+   * If provided, the SDK will attempt to download the diff first
+   * and fall back to the full package on failure
+   */
+  diffUrl?: string
+
+  /**
+   * Size of the differential package in bytes
+   * Used for progress tracking when downloading diffs
+   */
+  diffSize?: number
 
   /**
    * Download this package

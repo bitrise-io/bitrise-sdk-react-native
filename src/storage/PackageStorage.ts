@@ -14,6 +14,7 @@ const STORAGE_KEYS = {
   INSTALL_METADATA_PREFIX: '@bitrise/codepush/installMetadata/',
   ROLLBACK_METADATA_PREFIX: '@bitrise/codepush/rollbackMetadata/',
   PACKAGE_HISTORY: '@bitrise/codepush/packageHistory',
+  NOTIFIED_PACKAGE_HASH: '@bitrise/codepush/notifiedPackageHash',
 } as const
 
 /**
@@ -370,6 +371,22 @@ export class PackageStorage {
   static async getPackageByHash(packageHash: string): Promise<Package | null> {
     const history = await this.getPackageHistory()
     return history.find(p => p.packageHash === packageHash) || null
+  }
+
+  /**
+   * Get the hash of the package that has been confirmed via notifyAppReady()
+   * Used to determine isFirstRun status
+   */
+  static async getNotifiedPackageHash(): Promise<string | null> {
+    return PersistentStorage.getItem<string>(STORAGE_KEYS.NOTIFIED_PACKAGE_HASH, null)
+  }
+
+  /**
+   * Set the hash of the package that has been confirmed via notifyAppReady()
+   * This marks the package as "not first run" for future checks
+   */
+  static async setNotifiedPackageHash(hash: string): Promise<void> {
+    await PersistentStorage.setItem(STORAGE_KEYS.NOTIFIED_PACKAGE_HASH, hash)
   }
 
   /**
