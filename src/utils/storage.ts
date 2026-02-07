@@ -1,5 +1,6 @@
 import { getErrorMessage } from './error'
 import { FileSystem } from '../native/FileSystem'
+import { encodeText, decodeText } from './text'
 
 /**
  * Storage utilities for JSON serialization/deserialization
@@ -173,7 +174,7 @@ export class PersistentStorage {
       const data = await FileSystem.readFile(metadataPath)
 
       if (data !== null) {
-        const json = new TextDecoder().decode(data)
+        const json = decodeText(data)
         const parsed = JSON.parse(json) as Record<string, string>
         for (const [key, value] of Object.entries(parsed)) {
           this.cache.set(key, value)
@@ -200,7 +201,7 @@ export class PersistentStorage {
     }
 
     const json = JSON.stringify(data)
-    const bytes = new TextEncoder().encode(json)
+    const bytes = encodeText(json)
     const metadataPath = `${this.storageDir}/sdk/metadata.json`
 
     await FileSystem.writeFile(metadataPath, bytes)

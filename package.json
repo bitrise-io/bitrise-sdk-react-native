@@ -23,6 +23,7 @@
     "plugin/README.md",
     "app.plugin.js",
     "react-native.config.js",
+    "bitrise-react-native-sdk.podspec",
     "README.md",
     "LICENSE"
   ],

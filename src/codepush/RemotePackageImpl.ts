@@ -215,6 +215,7 @@ export class RemotePackageImpl implements RemotePackage {
 
   /**
    * Attempt a single download with timeout
+   * Note: React Native's fetch doesn't support ReadableStream, so we use arrayBuffer()
    */
   private async attemptDownload(
     url: string,
@@ -238,45 +239,21 @@ export class RemotePackageImpl implements RemotePackage {
       const contentLength = response.headers.get('Content-Length')
       const totalBytes = contentLength ? parseInt(contentLength, 10) : this.packageSize
 
-      // Read response stream
-      const reader = response.body?.getReader()
-      if (!reader) {
-        throw new NetworkError('Response body is not readable', { url })
-      }
+      // Report initial progress (0%)
+      this.reportProgress(0, totalBytes, progressCallback)
 
-      const chunks = await this.readStreamChunks(reader, totalBytes, progressCallback)
-      return this.concatenateChunks(chunks)
+      // React Native's fetch doesn't support response.body.getReader() (Streams API)
+      // Use arrayBuffer() which is supported in React Native
+      const arrayBuffer = await response.arrayBuffer()
+      const data = new Uint8Array(arrayBuffer)
+
+      // Report final progress (100%)
+      this.reportProgress(data.length, totalBytes, progressCallback)
+
+      return data
     } finally {
       clearTimeout(timeoutId)
     }
-  }
-
-  /**
-   * Read all chunks from a stream with progress tracking
-   */
-  private async readStreamChunks(
-    reader: ReadableStreamDefaultReader<Uint8Array>,
-    totalBytes: number,
-    progressCallback?: (progress: DownloadProgress) => void
-  ): Promise<Uint8Array[]> {
-    const chunks: Uint8Array[] = []
-    let receivedBytes = 0
-
-    while (true) {
-      const { done, value } = await reader.read()
-
-      if (done) {
-        break
-      }
-
-      if (value) {
-        chunks.push(value)
-        receivedBytes += value.length
-        this.reportProgress(receivedBytes, totalBytes, progressCallback)
-      }
-    }
-
-    return chunks
   }
 
   /**
@@ -297,22 +274,6 @@ export class RemotePackageImpl implements RemotePackage {
       // Don't let callback errors interrupt download
       console.warn('[CodePush] Progress callback error:', getErrorMessage(error))
     }
-  }
-
-  /**
-   * Combine multiple Uint8Array chunks into a single array
-   */
-  private concatenateChunks(chunks: Uint8Array[]): Uint8Array {
-    const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0)
-    const result = new Uint8Array(totalLength)
-    let position = 0
-
-    for (const chunk of chunks) {
-      result.set(chunk, position)
-      position += chunk.length
-    }
-
-    return result
   }
 
   /**

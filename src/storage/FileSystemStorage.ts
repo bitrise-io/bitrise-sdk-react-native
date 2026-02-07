@@ -1,4 +1,5 @@
 import { FileSystem } from '../native/FileSystem'
+import { encodeText, decodeText } from '../utils/text'
 
 /**
  * FileSystemStorage provides persistent file system storage for CodePush packages
@@ -102,7 +103,7 @@ export class FileSystemStorage {
   static async setPackageMetadata(hash: string, metadata: unknown): Promise<void> {
     const path = await this.getMetadataPath(hash)
     const json = JSON.stringify(metadata)
-    const data = new TextEncoder().encode(json)
+    const data = encodeText(json)
     await FileSystem.writeFile(path, data)
   }
 
@@ -119,7 +120,7 @@ export class FileSystemStorage {
       return null
     }
 
-    const json = new TextDecoder().decode(data)
+    const json = decodeText(data)
     return JSON.parse(json)
   }
 

@@ -81,21 +81,26 @@ export class BitriseClient {
   ): Promise<CheckUpdateResult> {
     const clientUniqueId = await this.getClientUniqueId()
 
-    // Build query parameters (snake_case as per CodePush API)
-    const queryParams = new URLSearchParams()
-    queryParams.set('deployment_key', this.deploymentKey)
-    queryParams.set('app_version', this.appVersion)
-    queryParams.set('client_unique_id', clientUniqueId)
-    queryParams.set('is_companion', 'false')
+    // Build query parameters manually (URLSearchParams.set not available in React Native)
+    const params: Record<string, string> = {
+      deployment_key: this.deploymentKey,
+      app_version: this.appVersion,
+      client_unique_id: clientUniqueId,
+      is_companion: 'false',
+    }
 
     if (currentPackageHash) {
-      queryParams.set('package_hash', currentPackageHash)
+      params.package_hash = currentPackageHash
     }
     if (currentLabel) {
-      queryParams.set('label', currentLabel)
+      params.label = currentLabel
     }
 
-    const url = `${this.serverUrl}/v0.1/public/codepush/update_check?${queryParams.toString()}`
+    const queryString = Object.entries(params)
+      .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+      .join('&')
+
+    const url = `${this.serverUrl}/v0.1/public/codepush/update_check?${queryString}`
 
     try {
       const response = await this.fetchWithRetry(url, {
@@ -218,28 +223,33 @@ export class BitriseClient {
   /**
    * Generate a UUID v4
    * Uses crypto.getRandomValues() for cryptographically secure random values
-   * Falls back to Math.random() if crypto API is unavailable
+   * Falls back to Math.random() if crypto API is unavailable (common in React Native)
    */
   private generateUUID(): string {
     // Try to use crypto.getRandomValues() for secure random values
-    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
-      const bytes = new Uint8Array(16)
-      crypto.getRandomValues(bytes)
+    // Note: In React Native, crypto may exist but getRandomValues may throw
+    try {
+      if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+        const bytes = new Uint8Array(16)
+        crypto.getRandomValues(bytes)
 
-      // Set version (4) and variant (RFC 4122) bits
-      bytes[6] = (bytes[6]! & 0x0f) | 0x40 // Version 4
-      bytes[8] = (bytes[8]! & 0x3f) | 0x80 // Variant RFC 4122
+        // Set version (4) and variant (RFC 4122) bits
+        bytes[6] = (bytes[6]! & 0x0f) | 0x40 // Version 4
+        bytes[8] = (bytes[8]! & 0x3f) | 0x80 // Variant RFC 4122
 
-      // Convert to hex string with dashes
-      const hex = Array.from(bytes)
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join('')
+        // Convert to hex string with dashes
+        const hex = Array.from(bytes)
+          .map(b => b.toString(16).padStart(2, '0'))
+          .join('')
 
-      return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+        return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+      }
+    } catch {
+      // crypto.getRandomValues threw - fall through to Math.random fallback
     }
 
-    // Fallback to Math.random() (less secure but functional)
-    console.warn('[CodePush] crypto.getRandomValues() not available, using Math.random() fallback')
+    // Fallback to Math.random() (less secure but functional for client IDs)
+    // This is common in React Native environments
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
       const r = (Math.random() * 16) | 0
       const v = c === 'x' ? r : (r & 0x3) | 0x8

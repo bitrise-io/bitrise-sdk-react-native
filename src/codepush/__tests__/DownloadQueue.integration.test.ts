@@ -5,6 +5,24 @@ import * as fileUtils from '../../utils/file'
 
 jest.mock('../../utils/file')
 
+/**
+ * Helper to create a mock fetch response with arrayBuffer support
+ */
+const createMockResponse = (
+  data: Uint8Array,
+  options: { ok?: boolean; status?: number; statusText?: string; contentLength?: string | null } = {}
+) => ({
+  ok: options.ok ?? true,
+  status: options.status ?? 200,
+  statusText: options.statusText ?? 'OK',
+  headers: {
+    get: jest.fn().mockReturnValue(
+      'contentLength' in options ? options.contentLength : String(data.length)
+    ),
+  },
+  arrayBuffer: jest.fn().mockResolvedValue(data.buffer),
+})
+
 describe('DownloadQueue Integration', () => {
   let queue: DownloadQueue
 
@@ -49,23 +67,7 @@ describe('DownloadQueue Integration', () => {
       const pkg = new RemotePackageImpl(mockPackageData)
       const mockData = new Uint8Array([1, 2, 3, 4, 5])
 
-      // Mock fetch response
-      const mockReader = {
-        read: jest
-          .fn()
-          .mockResolvedValueOnce({ done: false, value: mockData })
-          .mockResolvedValueOnce({ done: true }),
-      }
-
-      ;(global.fetch as jest.Mock).mockResolvedValue({
-        ok: true,
-        headers: {
-          get: jest.fn().mockReturnValue('5'),
-        },
-        body: {
-          getReader: jest.fn().mockReturnValue(mockReader),
-        },
-      })
+      ;(global.fetch as jest.Mock).mockResolvedValue(createMockResponse(mockData))
       ;(fileUtils.calculateHash as jest.Mock).mockResolvedValue('abc123')
       ;(fileUtils.savePackage as jest.Mock).mockResolvedValue('/codepush/abc123/index.bundle')
 
@@ -126,42 +128,9 @@ describe('DownloadQueue Integration', () => {
       const mockData3 = new Uint8Array([3])
 
       ;(global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          headers: { get: jest.fn().mockReturnValue('1') },
-          body: {
-            getReader: jest.fn().mockReturnValue({
-              read: jest
-                .fn()
-                .mockResolvedValueOnce({ done: false, value: mockData1 })
-                .mockResolvedValueOnce({ done: true }),
-            }),
-          },
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          headers: { get: jest.fn().mockReturnValue('1') },
-          body: {
-            getReader: jest.fn().mockReturnValue({
-              read: jest
-                .fn()
-                .mockResolvedValueOnce({ done: false, value: mockData2 })
-                .mockResolvedValueOnce({ done: true }),
-            }),
-          },
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          headers: { get: jest.fn().mockReturnValue('1') },
-          body: {
-            getReader: jest.fn().mockReturnValue({
-              read: jest
-                .fn()
-                .mockResolvedValueOnce({ done: false, value: mockData3 })
-                .mockResolvedValueOnce({ done: true }),
-            }),
-          },
-        })
+        .mockResolvedValueOnce(createMockResponse(mockData1))
+        .mockResolvedValueOnce(createMockResponse(mockData2))
+        .mockResolvedValueOnce(createMockResponse(mockData3))
       ;(fileUtils.calculateHash as jest.Mock)
         .mockResolvedValueOnce('hash1')
         .mockResolvedValueOnce('hash2')
@@ -212,28 +181,9 @@ describe('DownloadQueue Integration', () => {
         downloadUrl: 'https://example.com/package.zip',
       })
 
-      const chunk1 = new Uint8Array(400)
-      const chunk2 = new Uint8Array(300)
-      const chunk3 = new Uint8Array(300)
+      const mockData = new Uint8Array(1000)
 
-      const mockReader = {
-        read: jest
-          .fn()
-          .mockResolvedValueOnce({ done: false, value: chunk1 })
-          .mockResolvedValueOnce({ done: false, value: chunk2 })
-          .mockResolvedValueOnce({ done: false, value: chunk3 })
-          .mockResolvedValueOnce({ done: true }),
-      }
-
-      ;(global.fetch as jest.Mock).mockResolvedValue({
-        ok: true,
-        headers: {
-          get: jest.fn().mockReturnValue('1000'),
-        },
-        body: {
-          getReader: jest.fn().mockReturnValue(mockReader),
-        },
-      })
+      ;(global.fetch as jest.Mock).mockResolvedValue(createMockResponse(mockData))
       ;(fileUtils.calculateHash as jest.Mock).mockResolvedValue('abc123')
       ;(fileUtils.savePackage as jest.Mock).mockResolvedValue('/codepush/abc123/index.bundle')
 
@@ -246,6 +196,11 @@ describe('DownloadQueue Integration', () => {
 
       expect(progressCallback).toHaveBeenCalled()
       expect(progressUpdates.length).toBeGreaterThan(0)
+      // With arrayBuffer(), we get 0% and 100% progress
+      expect(progressUpdates[0]).toMatchObject({
+        receivedBytes: 0,
+        totalBytes: 1000,
+      })
       expect(progressUpdates[progressUpdates.length - 1]).toMatchObject({
         receivedBytes: 1000,
         totalBytes: 1000,
@@ -275,18 +230,7 @@ describe('DownloadQueue Integration', () => {
       ;(global.fetch as jest.Mock)
         .mockRejectedValueOnce(new Error('Network timeout'))
         .mockRejectedValueOnce(new Error('Connection refused'))
-        .mockResolvedValueOnce({
-          ok: true,
-          headers: { get: jest.fn().mockReturnValue('3') },
-          body: {
-            getReader: jest.fn().mockReturnValue({
-              read: jest
-                .fn()
-                .mockResolvedValueOnce({ done: false, value: mockData })
-                .mockResolvedValueOnce({ done: true }),
-            }),
-          },
-        })
+        .mockResolvedValueOnce(createMockResponse(mockData))
       ;(fileUtils.calculateHash as jest.Mock).mockResolvedValue('abc123')
       ;(fileUtils.savePackage as jest.Mock).mockResolvedValue('/codepush/abc123/index.bundle')
 
@@ -315,18 +259,7 @@ describe('DownloadQueue Integration', () => {
 
       const mockData = new Uint8Array([1, 2, 3])
 
-      ;(global.fetch as jest.Mock).mockResolvedValue({
-        ok: true,
-        headers: { get: jest.fn().mockReturnValue('3') },
-        body: {
-          getReader: jest.fn().mockReturnValue({
-            read: jest
-              .fn()
-              .mockResolvedValueOnce({ done: false, value: mockData })
-              .mockResolvedValueOnce({ done: true }),
-          }),
-        },
-      })
+      ;(global.fetch as jest.Mock).mockResolvedValue(createMockResponse(mockData))
       ;(fileUtils.calculateHash as jest.Mock).mockResolvedValue('abc123')
       ;(fileUtils.savePackage as jest.Mock).mockResolvedValue('/codepush/abc123/index.bundle')
 
@@ -364,27 +297,15 @@ describe('DownloadQueue Integration', () => {
         downloadUrl: 'https://example.com/large.zip',
       })
 
-      // Simulate large file with multiple chunks
-      const chunkSize = 1024 * 1024 // 1 MB chunks
-      const totalChunks = 60
-      const mockReader = {
-        read: jest.fn(),
-      }
+      // For large files, we just create a buffer of the expected size
+      const largeData = new Uint8Array(60 * 1024 * 1024)
 
-      // Add mock responses for all chunks
-      for (let i = 0; i < totalChunks; i++) {
-        const chunk = new Uint8Array(chunkSize)
-        mockReader.read.mockResolvedValueOnce({ done: false, value: chunk })
-      }
-      mockReader.read.mockResolvedValueOnce({ done: true })
       ;(global.fetch as jest.Mock).mockResolvedValue({
         ok: true,
         headers: {
           get: jest.fn().mockReturnValue(String(60 * 1024 * 1024)),
         },
-        body: {
-          getReader: jest.fn().mockReturnValue(mockReader),
-        },
+        arrayBuffer: jest.fn().mockResolvedValue(largeData.buffer),
       })
       ;(fileUtils.calculateHash as jest.Mock).mockResolvedValue('large123')
       ;(fileUtils.savePackage as jest.Mock).mockResolvedValue('/codepush/large123/index.bundle')

@@ -1,6 +1,7 @@
 import { UpdateError } from '../types/errors'
 import { PackageStorage } from '../storage/PackageStorage'
 import { getErrorMessage } from './error'
+import { uint8ArrayToBase64, base64ToUint8Array } from './base64'
 
 import { Platform } from 'react-native'
 
@@ -40,14 +41,19 @@ export function getCodePushDirectory(): string {
 /**
  * Calculate SHA-256 hash of data
  * Uses Web Crypto API if available, otherwise returns "unverified"
+ * Note: React Native doesn't have Web Crypto API by default
  *
  * @param data - Data to hash
  * @returns Promise resolving to hex-encoded hash string
  */
 export async function calculateHash(data: Uint8Array): Promise<string> {
   try {
-    // Check if Web Crypto API is available
-    if (typeof crypto !== 'undefined' && crypto.subtle) {
+    // Check if Web Crypto API is available (not available in React Native by default)
+    if (
+      typeof crypto !== 'undefined' &&
+      crypto.subtle &&
+      typeof crypto.subtle.digest === 'function'
+    ) {
       // Create a new buffer to ensure compatibility
       const buffer = new Uint8Array(data).buffer
       const hashBuffer = await crypto.subtle.digest('SHA-256', buffer)
@@ -55,16 +61,13 @@ export async function calculateHash(data: Uint8Array): Promise<string> {
       const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
       return hashHex
     }
-
-    // Fallback: Web Crypto not available
-    console.warn(
-      '[CodePush] Web Crypto API not available. Hash verification disabled. HTTPS provides transport security.'
-    )
-    return 'unverified'
-  } catch (error) {
-    console.warn('[CodePush] Hash calculation failed:', getErrorMessage(error))
-    return 'unverified'
+  } catch {
+    // crypto.subtle threw - fall through to unverified
   }
+
+  // Fallback: Web Crypto not available (common in React Native)
+  // HTTPS provides transport security, hash verification is optional
+  return 'unverified'
 }
 
 /**
@@ -218,27 +221,3 @@ function extractPackageHashFromPath(localPath: string): string | null {
   return null
 }
 
-/**
- * Convert Uint8Array to base64 string
- */
-function uint8ArrayToBase64(data: Uint8Array): string {
-  let binary = ''
-  const len = data.length
-  for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(data[i] as number)
-  }
-  return btoa(binary)
-}
-
-/**
- * Convert base64 string to Uint8Array
- */
-function base64ToUint8Array(base64: string): Uint8Array {
-  const binary = atob(base64)
-  const len = binary.length
-  const bytes = new Uint8Array(len)
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binary.charCodeAt(i) & 0xff
-  }
-  return bytes
-}

@@ -2,6 +2,10 @@ import type { Package, LocalPackage } from '../types/package'
 import { PersistentStorage } from '../utils/storage'
 import { FileSystem } from '../native/FileSystem'
 import { FileSystemStorage } from './FileSystemStorage'
+import {
+  uint8ArrayToBase64 as encodeBase64,
+  base64ToUint8Array as decodeBase64,
+} from '../utils/base64'
 
 /**
  * Storage keys for CodePush metadata
@@ -191,7 +195,7 @@ export class PackageStorage {
   static async setPackageData(packageHash: string, base64Data: string): Promise<void> {
     if (FileSystem.isAvailable()) {
       try {
-        const data = this.base64ToUint8Array(base64Data)
+        const data = decodeBase64(base64Data)
         await FileSystemStorage.setPackageData(packageHash, data)
         return
       } catch (error) {
@@ -212,7 +216,7 @@ export class PackageStorage {
       try {
         const data = await FileSystemStorage.getPackageData(packageHash)
         if (data !== null) {
-          return this.uint8ArrayToBase64(data)
+          return encodeBase64(data)
         }
       } catch (error) {
         console.warn('[CodePush] Filesystem read failed, using persistent storage:', error)
@@ -238,41 +242,6 @@ export class PackageStorage {
 
     const key = `${STORAGE_KEYS.PACKAGE_DATA_PREFIX}${packageHash}`
     await PersistentStorage.removeItem(key)
-  }
-
-  /**
-   * Convert base64 string to Uint8Array
-   */
-  private static base64ToUint8Array(base64: string): Uint8Array {
-    const binary = atob(base64)
-    const len = binary.length
-    const bytes = new Uint8Array(len)
-
-    for (let i = 0; i < len; i++) {
-      const code = binary.charCodeAt(i)
-      if (!isNaN(code)) {
-        bytes[i] = code
-      }
-    }
-
-    return bytes
-  }
-
-  /**
-   * Convert Uint8Array to base64 string
-   */
-  private static uint8ArrayToBase64(data: Uint8Array): string {
-    let binary = ''
-    const len = data.length
-
-    for (let i = 0; i < len; i++) {
-      const byte = data[i]
-      if (byte !== undefined) {
-        binary += String.fromCharCode(byte)
-      }
-    }
-
-    return btoa(binary)
   }
 
   /**

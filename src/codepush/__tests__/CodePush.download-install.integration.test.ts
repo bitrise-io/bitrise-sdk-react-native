@@ -21,6 +21,24 @@ jest.mock('../../utils/platform', () => ({
 // Mock fetch
 global.fetch = jest.fn()
 
+/**
+ * Helper to create a mock fetch response with arrayBuffer support
+ */
+const createMockResponse = (
+  data: Uint8Array,
+  options: { ok?: boolean; status?: number; statusText?: string; contentLength?: string | null } = {}
+) => ({
+  ok: options.ok ?? true,
+  status: options.status ?? 200,
+  statusText: options.statusText ?? 'OK',
+  headers: {
+    get: jest.fn().mockReturnValue(
+      'contentLength' in options ? options.contentLength : String(data.length)
+    ),
+  },
+  arrayBuffer: jest.fn().mockResolvedValue(data.buffer),
+})
+
 describe('CodePush Download & Install Integration', () => {
   const config: BitriseConfig = {
     deploymentKey: 'test-deployment-key',
@@ -95,22 +113,7 @@ describe('CodePush Download & Install Integration', () => {
       }))
 
       // Mock fetch for download
-      const mockReader = {
-        read: jest
-          .fn()
-          .mockResolvedValueOnce({ done: false, value: mockData })
-          .mockResolvedValueOnce({ done: true }),
-      }
-
-      ;(global.fetch as jest.Mock).mockResolvedValue({
-        ok: true,
-        headers: {
-          get: jest.fn().mockReturnValue('5'),
-        },
-        body: {
-          getReader: jest.fn().mockReturnValue(mockReader),
-        },
-      })
+      ;(global.fetch as jest.Mock).mockResolvedValue(createMockResponse(mockData))
 
       // Mock file utilities
       ;(fileUtils.calculateHash as jest.Mock).mockResolvedValue('abc123')
@@ -125,6 +128,11 @@ describe('CodePush Download & Install Integration', () => {
       const progressCallback = jest.fn()
       const localPackage = await update!.download(progressCallback)
 
+      // With arrayBuffer(), we get initial (0%) and final (100%) progress
+      expect(progressCallback).toHaveBeenCalledWith({
+        receivedBytes: 0,
+        totalBytes: 5,
+      })
       expect(progressCallback).toHaveBeenCalledWith({
         receivedBytes: 5,
         totalBytes: 5,
@@ -178,22 +186,7 @@ describe('CodePush Download & Install Integration', () => {
         }),
       }))
 
-      const mockReader = {
-        read: jest
-          .fn()
-          .mockResolvedValueOnce({ done: false, value: mockData })
-          .mockResolvedValueOnce({ done: true }),
-      }
-
-      ;(global.fetch as jest.Mock).mockResolvedValue({
-        ok: true,
-        headers: {
-          get: jest.fn().mockReturnValue('3'),
-        },
-        body: {
-          getReader: jest.fn().mockReturnValue(mockReader),
-        },
-      })
+      ;(global.fetch as jest.Mock).mockResolvedValue(createMockResponse(mockData))
       ;(fileUtils.calculateHash as jest.Mock).mockResolvedValue('xyz789')
       ;(fileUtils.savePackage as jest.Mock).mockResolvedValue('/codepush/xyz789/index.bundle')
 
@@ -275,23 +268,7 @@ describe('CodePush Download & Install Integration', () => {
         }),
       }))
 
-      // Create a new reader for each fetch attempt
-      const createMockReader = () => ({
-        read: jest
-          .fn()
-          .mockResolvedValueOnce({ done: false, value: mockData })
-          .mockResolvedValueOnce({ done: true }),
-      })
-
-      ;(global.fetch as jest.Mock).mockResolvedValue({
-        ok: true,
-        headers: {
-          get: jest.fn().mockReturnValue('3'),
-        },
-        body: {
-          getReader: jest.fn(() => createMockReader()),
-        },
-      })
+      ;(global.fetch as jest.Mock).mockResolvedValue(createMockResponse(mockData))
 
       // Mock hash mismatch
       ;(fileUtils.calculateHash as jest.Mock).mockResolvedValue('actual456')
@@ -304,9 +281,8 @@ describe('CodePush Download & Install Integration', () => {
     })
 
     it('should track download progress correctly', async () => {
-      const chunk1 = new Uint8Array([1, 2, 3])
-      const chunk2 = new Uint8Array([4, 5])
-      const chunk3 = new Uint8Array([6])
+      // With arrayBuffer(), we only get 0% and 100% progress, not per-chunk
+      const mockData = new Uint8Array([1, 2, 3, 4, 5, 6])
 
       const mockRemotePackage = new RemotePackageImpl({
         appVersion: '1.0.0',
@@ -330,24 +306,7 @@ describe('CodePush Download & Install Integration', () => {
         }),
       }))
 
-      const mockReader = {
-        read: jest
-          .fn()
-          .mockResolvedValueOnce({ done: false, value: chunk1 })
-          .mockResolvedValueOnce({ done: false, value: chunk2 })
-          .mockResolvedValueOnce({ done: false, value: chunk3 })
-          .mockResolvedValueOnce({ done: true }),
-      }
-
-      ;(global.fetch as jest.Mock).mockResolvedValue({
-        ok: true,
-        headers: {
-          get: jest.fn().mockReturnValue('6'),
-        },
-        body: {
-          getReader: jest.fn().mockReturnValue(mockReader),
-        },
-      })
+      ;(global.fetch as jest.Mock).mockResolvedValue(createMockResponse(mockData))
       ;(fileUtils.calculateHash as jest.Mock).mockResolvedValue('progress123')
       ;(fileUtils.savePackage as jest.Mock).mockResolvedValue('/codepush/progress123/index.bundle')
 
@@ -355,16 +314,13 @@ describe('CodePush Download & Install Integration', () => {
       const update = await codePush.checkForUpdate()
       await update!.download(progressCallback)
 
-      expect(progressCallback).toHaveBeenCalledTimes(3)
+      // With arrayBuffer(), we get initial (0%) and final (100%) progress
+      expect(progressCallback).toHaveBeenCalledTimes(2)
       expect(progressCallback).toHaveBeenNthCalledWith(1, {
-        receivedBytes: 3,
+        receivedBytes: 0,
         totalBytes: 6,
       })
       expect(progressCallback).toHaveBeenNthCalledWith(2, {
-        receivedBytes: 5,
-        totalBytes: 6,
-      })
-      expect(progressCallback).toHaveBeenNthCalledWith(3, {
         receivedBytes: 6,
         totalBytes: 6,
       })
@@ -395,22 +351,7 @@ describe('CodePush Download & Install Integration', () => {
         }),
       }))
 
-      const mockReader = {
-        read: jest
-          .fn()
-          .mockResolvedValueOnce({ done: false, value: mockData })
-          .mockResolvedValueOnce({ done: true }),
-      }
-
-      ;(global.fetch as jest.Mock).mockResolvedValue({
-        ok: true,
-        headers: {
-          get: jest.fn().mockReturnValue('3'),
-        },
-        body: {
-          getReader: jest.fn().mockReturnValue(mockReader),
-        },
-      })
+      ;(global.fetch as jest.Mock).mockResolvedValue(createMockResponse(mockData))
       ;(fileUtils.calculateHash as jest.Mock).mockResolvedValue('resume123')
       ;(fileUtils.savePackage as jest.Mock).mockResolvedValue('/codepush/resume123/index.bundle')
 

@@ -1003,14 +1003,15 @@ describe('CodePush', () => {
         )
       })
 
-      it('should handle gracefully when no current package exists', async () => {
+      it('should handle gracefully when no current or pending package exists', async () => {
         ;(PackageStorage.getCurrentPackage as jest.Mock).mockResolvedValue(null)
+        ;(PackageStorage.getPendingPackage as jest.Mock).mockResolvedValue(null)
 
         expect(() => codePush.notifyAppReady()).not.toThrow()
 
         await new Promise(resolve => setTimeout(resolve, 10))
 
-        // Should not attempt to clear pending
+        // Should not attempt to clear pending when there's nothing pending
         expect(PackageStorage.clearPendingPackage).not.toHaveBeenCalled()
       })
     })

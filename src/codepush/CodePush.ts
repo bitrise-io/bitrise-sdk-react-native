@@ -542,21 +542,22 @@ export class CodePush {
    */
   private async performNotifyAppReady(): Promise<void> {
     try {
-      // Get current running package
+      // Check if there's a pending package that should be promoted to current
+      const pendingPackage = await PackageStorage.getPendingPackage()
+
+      if (pendingPackage) {
+        // Promote pending package to current (this is the key step after restart!)
+        await PackageStorage.setCurrentPackage(pendingPackage)
+        await PackageStorage.clearPendingPackage()
+        console.log('[CodePush] Promoted pending package to current:', pendingPackage.packageHash)
+      }
+
+      // Get current running package (now includes newly promoted package)
       const currentPackage = await PackageStorage.getCurrentPackage()
 
       if (!currentPackage) {
-        // No package installed, nothing to notify
+        // No package installed, nothing more to notify
         return
-      }
-
-      // Check if this package was pending
-      const pendingPackage = await PackageStorage.getPendingPackage()
-
-      if (pendingPackage?.packageHash === currentPackage.packageHash) {
-        // This WAS pending, now it's confirmed successful
-        // Move from pending to current (already done by native restart)
-        await PackageStorage.clearPendingPackage()
       }
 
       // Clear failed update flag for this package (if it exists)

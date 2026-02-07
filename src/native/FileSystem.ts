@@ -1,5 +1,9 @@
 import { NativeModules } from 'react-native'
 import { FileSystemError } from '../types/errors'
+import {
+  uint8ArrayToBase64 as encodeBase64,
+  base64ToUint8Array as decodeBase64,
+} from '../utils/base64'
 
 /**
  * Native module interface for file system operations
@@ -84,7 +88,7 @@ export class FileSystem {
     }
 
     try {
-      const base64 = this.uint8ArrayToBase64(data)
+      const base64 = encodeBase64(data)
       await this.nativeModule!.writeFile(path, base64)
     } catch (error) {
       throw new FileSystemError('Failed to write file', {
@@ -116,7 +120,7 @@ export class FileSystem {
         return null
       }
 
-      return this.base64ToUint8Array(base64)
+      return decodeBase64(base64)
     } catch (error) {
       throw new FileSystemError('Failed to read file', {
         code: 'READ_ERROR',
@@ -249,38 +253,4 @@ export class FileSystem {
     }
   }
 
-  /**
-   * Convert Uint8Array to base64 string
-   */
-  private static uint8ArrayToBase64(data: Uint8Array): string {
-    let binary = ''
-    const len = data.length
-
-    for (let i = 0; i < len; i++) {
-      const byte = data[i]
-      if (byte !== undefined) {
-        binary += String.fromCharCode(byte)
-      }
-    }
-
-    return btoa(binary)
-  }
-
-  /**
-   * Convert base64 string to Uint8Array
-   */
-  private static base64ToUint8Array(base64: string): Uint8Array {
-    const binary = atob(base64)
-    const len = binary.length
-    const bytes = new Uint8Array(len)
-
-    for (let i = 0; i < len; i++) {
-      const code = binary.charCodeAt(i)
-      if (!isNaN(code)) {
-        bytes[i] = code
-      }
-    }
-
-    return bytes
-  }
 }
